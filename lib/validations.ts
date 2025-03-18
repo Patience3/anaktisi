@@ -102,18 +102,6 @@ export const SignUpSchema = z.object({
 });
 
 
-
-//other schemas
-
-
-export const CreateProgramSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters"),
-  description: z.string().min(10, "Description must be at least 10 characters"),
-  categoryId: z.string().uuid("Valid category ID is required"),
-  durationDays: z.number().int().positive().optional(),
-  isSelfPaced: z.boolean().default(false)
-});
-
 export const CreateModuleSchema = z.object({
   programId: z.string().uuid("Valid program ID is required"),
   title: z.string().min(3, "Title must be at least 3 characters"),
@@ -165,4 +153,19 @@ export const CreateMoodEntrySchema = z.object({
   }),
   moodScore: z.number().int().min(1).max(10, "Mood score must be between 1 and 10"),
   journalEntry: z.string().optional()
+});
+
+
+// Program creation/update schema with improved validation
+export const CreateProgramSchema = z.object({
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    categoryId: z.string().uuid("Valid category ID is required"),
+    durationDays: z
+        .number()
+        .int("Duration must be a whole number")
+        .positive("Duration must be a positive number")
+        .optional()
+        .nullable(),
+    isSelfPaced: z.boolean().default(false)
 });
