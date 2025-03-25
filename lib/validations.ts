@@ -102,14 +102,6 @@ export const SignUpSchema = z.object({
 });
 
 
-export const CreateModuleSchema = z.object({
-  programId: z.string().uuid("Valid program ID is required"),
-  title: z.string().min(3, "Title must be at least 3 characters"),
-  description: z.string().min(10, "Description must be at least 10 characters"),
-  sequenceNumber: z.number().int().min(1, "Sequence number must be at least 1"),
-  estimatedMinutes: z.number().int().positive().optional(),
-  isRequired: z.boolean().default(true)
-});
 
 export const CreateContentSchema = z.object({
   moduleId: z.string().uuid("Valid module ID is required"),
@@ -169,3 +161,94 @@ export const CreateProgramSchema = z.object({
         .nullable(),
     isSelfPaced: z.boolean().default(false)
 });
+
+// Module creation/update schema with validation
+export const CreateModuleSchema = z.object({
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    programId: z.string().uuid("Valid program ID is required"),
+    sequenceNumber: z.number().int("Sequence must be a whole number").positive("Sequence must be positive"),
+    estimatedMinutes: z
+        .number()
+        .int("Duration must be a whole number")
+        .positive("Duration must be positive")
+        .optional(),
+    isRequired: z.boolean().default(true)
+});
+
+
+
+// Module ID validation schema
+export const ModuleIdSchema = z.object({
+    id: z.string().uuid("Invalid module ID format")
+});
+
+// Module sequence update schema
+export const UpdateModuleSequenceSchema = z.object({
+    moduleId: z.string().uuid("Invalid module ID format"),
+    programId: z.string().uuid("Invalid program ID format"),
+    newSequence: z.number().int("Sequence must be a whole number").positive("Sequence must be positive")
+});
+
+
+
+// Text content schema
+export const TextContentSchema = z.object({
+    moduleId: z.string().uuid("Valid module ID is required"),
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    content: z.string().min(10, "Content must be at least 10 characters"),
+    sequenceNumber: z
+        .number()
+        .int("Sequence must be a whole number")
+        .positive("Sequence must be positive")
+});
+
+// Video content schema
+export const VideoContentSchema = z.object({
+    moduleId: z.string().uuid("Valid module ID is required"),
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    videoUrl: z.string().url("Please enter a valid URL"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    sequenceNumber: z
+        .number()
+        .int("Sequence must be a whole number")
+        .positive("Sequence must be positive")
+});
+
+// Base content item type
+export type ContentItem = {
+    id: string;
+    module_id: string;
+    title: string;
+    content_type: 'video' | 'text' | 'document' | 'link';
+    content: string;
+    sequence_number: number;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+};
+
+// Document content schema
+export const DocumentContentSchema = z.object({
+    moduleId: z.string().uuid("Valid module ID is required"),
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    documentUrl: z.string().url("Please enter a valid URL"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    sequenceNumber: z
+        .number()
+        .int("Sequence must be a whole number")
+        .positive("Sequence must be positive")
+});
+
+// Link content schema
+export const LinkContentSchema = z.object({
+    moduleId: z.string().uuid("Valid module ID is required"),
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    linkUrl: z.string().url("Please enter a valid URL"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    sequenceNumber: z
+        .number()
+        .int("Sequence must be a whole number")
+        .positive("Sequence must be positive")
+});
+

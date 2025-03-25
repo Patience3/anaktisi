@@ -1,4 +1,5 @@
 import { getProgramById } from "@/lib/actions/admin/program";
+import { getAllModules } from "@/lib/actions/admin/module";
 import { requireAdmin } from "@/lib/auth-utils";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
@@ -13,13 +14,17 @@ import {
     Edit,
     Trash2,
     Power,
+    PlusCircle,
+    LayoutList
 } from "lucide-react";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-// We'll use native Date formatting instead of date-fns
 import { DeleteProgramButton } from "@/components/admin/delete-program-button";
 import { ToggleProgramStatusButton } from "@/components/admin/toggle-program-status-button";
+import { ModulesList } from "@/components/admin/modules-list";
+import { Suspense } from "react";
+import { TableSkeleton } from "@/components/shared/table-skeleton";
 
 interface ProgramDetailsProps {
     params: {
@@ -105,30 +110,26 @@ export default async function ProgramDetails({ params }: ProgramDetailsProps) {
                         </CardContent>
                     </Card>
 
+                    {/* Modules Section */}
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Modules</CardTitle>
-                            <CardDescription>
-                                Content and activities for this program
-                            </CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <div>
+                                <CardTitle>Learning Modules</CardTitle>
+                                <CardDescription>
+                                    Content and activities for this program
+                                </CardDescription>
+                            </div>
+                            <Link href={`/admin/programs/${program.id}/modules`}>
+                                <Button variant="outline" size="sm">
+                                    <LayoutList className="mr-2 h-4 w-4" />
+                                    View All Modules
+                                </Button>
+                            </Link>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex items-center justify-center h-40 border-2 border-dashed rounded-lg border-gray-200">
-                                <div className="text-center">
-                                    <FileText className="mx-auto h-10 w-10 text-gray-400" />
-                                    <h3 className="mt-2 text-sm font-semibold">No modules yet</h3>
-                                    <p className="mt-1 text-sm text-gray-500">
-                                        Get started by creating a new module
-                                    </p>
-                                    <div className="mt-4">
-                                        <Button size="sm" asChild>
-                                            <Link href={`/admin/programs/${program.id}/learning-modules/create`}>
-                                                Add First Module
-                                            </Link>
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
+                            <Suspense fallback={<TableSkeleton columns={4} rows={3} />}>
+                                <ModuleListContainer programId={program.id} />
+                            </Suspense>
                         </CardContent>
                     </Card>
                 </div>
@@ -199,6 +200,96 @@ export default async function ProgramDetails({ params }: ProgramDetailsProps) {
                         </CardContent>
                     </Card>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+// This is a separate component to fetch and display modules
+async function ModuleListContainer({ programId }: { programId: string }) {
+    // Fetch modules data
+    const modulesResponse = await getAllModules(programId);
+    const modules = modulesResponse.success && modulesResponse.data ? modulesResponse.data : [];
+
+    // If no modules exist yet, show the "Add First Module" button
+    if (modules.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center p-10 border rounded-lg border-gray-200 bg-white">
+                <div className="bg-slate-100 rounded-full p-4 mb-4">
+                    <FileText className="h-10 w-10 text-slate-500" />
+                </div>
+                <h3 className="text-lg font-semibold">No modules yet</h3>
+                <p className="text-muted-foreground text-center max-w-md mt-2 mb-6">
+                    Get started by creating your first learning module. Modules help organize
+                    your program content into logical sections.
+                </p>
+                <Button asChild>
+                    <Link href={`/admin/programs/${programId}/modules/create`}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add First Module
+                    </Link>
+                </Button>
+            </div>
+        );
+    }
+
+    // If we have modules, show the first few with a link to view all
+    return (
+        <div className="space-y-4">
+            {modules.slice(0, 3).map((module) => (
+                <Card key={module.id}>
+                    <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                            <Link href={`/admin/programs/${programId}/modules/${module.id}`} className="hover:underline">
+                                <CardTitle className="text-lg">{module.title}</CardTitle>
+                            </Link>
+                            <Badge variant="outline" className="ml-2">
+                                {module.sequence_number}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="pb-3">
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                            {module.description}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                            <Badge variant={module.is_required ? "secondary" : "outline"}>
+                                {module.is_required ? "Required" : "Optional"}
+                            </Badge>
+                            {module.estimated_minutes && (
+                                <Badge variant="outline">
+                                    {module.estimated_minutes} minutes
+                                </Badge>
+                            )}
+                        </div>
+                    </CardContent>
+                    <CardFooter className="pt-0">
+                        <Button variant="ghost" size="sm" asChild className="ml-auto">
+                            <Link href={`/admin/programs/${programId}/modules/${module.id}`}>
+                                View Details
+                            </Link>
+                        </Button>
+                    </CardFooter>
+                </Card>
+            ))}
+
+            {modules.length > 3 && (
+                <div className="text-center mt-4">
+                    <Button variant="outline" asChild>
+                        <Link href={`/admin/programs/${programId}/modules`}>
+                            View All {modules.length} Modules
+                        </Link>
+                    </Button>
+                </div>
+            )}
+
+            <div className="text-center mt-4">
+                <Button asChild>
+                    <Link href={`/admin/programs/${programId}/modules/create`}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add Another Module
+                    </Link>
+                </Button>
             </div>
         </div>
     );
