@@ -1,10 +1,11 @@
+// components/admin/text-content-form.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { createTextContent, getNextContentSequence } from "@/lib/actions/admin/content";
+import { createTextContent, updateTextContent, getNextContentSequence } from "@/lib/actions/admin/content";
 import { TextContentSchema, ContentItem } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,8 +56,7 @@ export function TextContentForm({ moduleId, onSuccess, contentItem }: TextConten
                 try {
                     const result = await getNextContentSequence(moduleId);
                     if (result.success) {
-                        // @ts-ignore
-                        form.setValue("sequenceNumber", result.data);
+                        form.setValue("sequenceNumber", result.data as number);
                     }
                 } catch (e) {
                     console.error("Failed to get next sequence number:", e);
@@ -68,6 +68,8 @@ export function TextContentForm({ moduleId, onSuccess, contentItem }: TextConten
             }
 
             fetchNextSequence();
+        } else {
+            setIsLoadingNextSequence(false);
         }
     }, [form, isEditMode, moduleId]);
 
@@ -76,11 +78,20 @@ export function TextContentForm({ moduleId, onSuccess, contentItem }: TextConten
         setError(null);
 
         try {
-            // Create new text content
-            const result = await createTextContent(data);
+            let result;
+
+            if (isEditMode && contentItem) {
+                // Update existing content
+                result = await updateTextContent(contentItem.id, data);
+            } else {
+                // Create new text content
+                result = await createTextContent(data);
+            }
 
             if (result.success && result.data) {
-                form.reset(); // Reset form on success
+                if (!isEditMode) {
+                    form.reset(); // Reset form on success for creation
+                }
                 onSuccess(result.data);
             } else {
                 setError(result.error?.message || "Failed to save content");

@@ -1,10 +1,11 @@
+// components/admin/video-content-form.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { createVideoContent, getNextContentSequence } from "@/lib/actions/admin/content";
+import { createVideoContent, updateVideoContent, getNextContentSequence } from "@/lib/actions/admin/content";
 import { VideoContentSchema, ContentItem } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ type VideoContentFormValues = z.infer<typeof VideoContentSchema>;
 interface VideoContentFormProps {
     moduleId: string;
     onSuccess: (content: ContentItem) => void;
-    contentItem?: ContentItem; // For editing, not implemented yet
+    contentItem?: ContentItem; // For editing mode
 }
 
 export function VideoContentForm({ moduleId, onSuccess, contentItem }: VideoContentFormProps) {
@@ -74,6 +75,8 @@ export function VideoContentForm({ moduleId, onSuccess, contentItem }: VideoCont
             }
 
             fetchNextSequence();
+        } else {
+            setIsLoadingNextSequence(false);
         }
     }, [form, isEditMode, moduleId]);
 
@@ -82,13 +85,21 @@ export function VideoContentForm({ moduleId, onSuccess, contentItem }: VideoCont
         setError(null);
 
         try {
-            // Create new video content
-            const result = await createVideoContent(data);
+            let result;
 
-            if (result.success) {
-                form.reset(); // Reset form on success
-                // Pass the content directly without checking result.data
-                onSuccess(result.data as ContentItem);
+            if (isEditMode && contentItem) {
+                // Update existing video content
+                result = await updateVideoContent(contentItem.id, data);
+            } else {
+                // Create new video content
+                result = await createVideoContent(data);
+            }
+
+            if (result.success && result.data) {
+                if (!isEditMode) {
+                    form.reset(); // Reset form on success for creation
+                }
+                onSuccess(result.data);
             } else {
                 setError(result.error?.message || "Failed to save content");
 

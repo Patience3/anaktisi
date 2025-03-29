@@ -434,3 +434,213 @@ export async function uploadFile(file: File, path: string): Promise<ActionRespon
         return handleServerError(error);
     }
 }
+
+
+// Add these functions to lib/actions/admin/content.ts
+
+/**
+ * Update an existing text content item
+ */
+export async function updateTextContent(
+    contentId: string,
+    params: z.infer<typeof TextContentSchema>
+): Promise<ActionResponse<ContentItem>> {
+    try {
+        // Validate the data
+        const validParams = TextContentSchema.parse(params);
+        const validId = z.string().uuid("Invalid content ID").parse(contentId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Update the text content
+        const { data, error } = await supabase
+            .from("content_items")
+            .update({
+                title: validParams.title,
+                content: validParams.content,
+                sequence_number: validParams.sequenceNumber,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", validId)
+            .select()
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        // Refresh the content list
+        revalidatePath(`/admin/programs/*/modules/${validParams.moduleId}`);
+        revalidatePath(`/admin/programs/*/modules/*/content/${validId}`);
+
+        return {
+            success: true,
+            data: data as ContentItem
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
+ * Update an existing video content item
+ */
+export async function updateVideoContent(
+    contentId: string,
+    params: z.infer<typeof VideoContentSchema>
+): Promise<ActionResponse<ContentItem>> {
+    try {
+        // Validate the data
+        const validParams = VideoContentSchema.parse(params);
+        const validId = z.string().uuid("Invalid content ID").parse(contentId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Format content as JSON with video URL and description
+        const content = JSON.stringify({
+            videoUrl: validParams.videoUrl,
+            description: validParams.description
+        });
+
+        // Update the video content
+        const { data, error } = await supabase
+            .from("content_items")
+            .update({
+                title: validParams.title,
+                content: content,
+                sequence_number: validParams.sequenceNumber,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", validId)
+            .select()
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        // Refresh the content list
+        revalidatePath(`/admin/programs/*/modules/${validParams.moduleId}`);
+        revalidatePath(`/admin/programs/*/modules/*/content/${validId}`);
+
+        return {
+            success: true,
+            data: data as ContentItem
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
+ * Update an existing document content item
+ */
+export async function updateDocumentContent(
+    contentId: string,
+    params: z.infer<typeof DocumentContentSchema>
+): Promise<ActionResponse<ContentItem>> {
+    try {
+        // Validate the data
+        const validParams = DocumentContentSchema.parse(params);
+        const validId = z.string().uuid("Invalid content ID").parse(contentId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Format content as JSON with document URL, file type and description
+        const content = JSON.stringify({
+            documentUrl: validParams.documentUrl,
+            fileType: validParams.fileType,
+            description: validParams.description
+        });
+
+        // Update the document content
+        const { data, error } = await supabase
+            .from("content_items")
+            .update({
+                title: validParams.title,
+                content: content,
+                sequence_number: validParams.sequenceNumber,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", validId)
+            .select()
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        // Refresh the content list
+        revalidatePath(`/admin/programs/*/modules/${validParams.moduleId}`);
+        revalidatePath(`/admin/programs/*/modules/*/content/${validId}`);
+
+        return {
+            success: true,
+            data: data as ContentItem
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
+ * Update an existing link content item
+ */
+export async function updateLinkContent(
+    contentId: string,
+    params: z.infer<typeof LinkContentSchema>
+): Promise<ActionResponse<ContentItem>> {
+    try {
+        // Validate the data
+        const validParams = LinkContentSchema.parse(params);
+        const validId = z.string().uuid("Invalid content ID").parse(contentId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Format content as JSON with link URL and description
+        const content = JSON.stringify({
+            linkUrl: validParams.linkUrl,
+            description: validParams.description
+        });
+
+        // Update the link content
+        const { data, error } = await supabase
+            .from("content_items")
+            .update({
+                title: validParams.title,
+                content: content,
+                sequence_number: validParams.sequenceNumber,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", validId)
+            .select()
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        // Refresh the content list
+        revalidatePath(`/admin/programs/*/modules/${validParams.moduleId}`);
+        revalidatePath(`/admin/programs/*/modules/*/content/${validId}`);
+
+        return {
+            success: true,
+            data: data as ContentItem
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
