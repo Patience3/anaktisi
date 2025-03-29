@@ -228,17 +228,6 @@ export type ContentItem = {
     updated_at: string;
 };
 
-// Document content schema
-export const DocumentContentSchema = z.object({
-    moduleId: z.string().uuid("Valid module ID is required"),
-    title: z.string().min(3, "Title must be at least 3 characters"),
-    documentUrl: z.string().url("Please enter a valid URL"),
-    description: z.string().min(10, "Description must be at least 10 characters"),
-    sequenceNumber: z
-        .number()
-        .int("Sequence must be a whole number")
-        .positive("Sequence must be positive")
-});
 
 // Link content schema
 export const LinkContentSchema = z.object({
@@ -251,4 +240,77 @@ export const LinkContentSchema = z.object({
         .int("Sequence must be a whole number")
         .positive("Sequence must be positive")
 });
+
+
+// This content should be added to your lib/validations.ts file or create a new assessment-validations.ts file
+
+// Enhanced document content schema with file type support
+export const DocumentContentSchema = z.object({
+    moduleId: z.string().uuid("Valid module ID is required"),
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    documentUrl: z.string().url("Please enter a valid URL"),
+    fileType: z.string().min(1, "File type is required"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    sequenceNumber: z
+        .number()
+        .int("Sequence must be a whole number")
+        .positive("Sequence must be positive")
+});
+
+
+// Assessment question schema
+export const CreateQuestionSchema = z.object({
+    assessmentId: z.string().uuid("Valid assessment ID is required"),
+    questionText: z.string().min(5, "Question text must be at least 5 characters"),
+    questionType: z.enum(['multiple_choice', 'true_false', 'text_response'], {
+        errorMap: () => ({ message: "Question type must be multiple_choice, true_false, or text_response" })
+    }),
+    sequenceNumber: z.number().int("Sequence must be a whole number").positive("Sequence must be positive"),
+    points: z.number().int("Points must be a whole number").min(1, "Points must be at least 1")
+});
+
+// Question option schema for multiple choice questions
+export const CreateQuestionOptionSchema = z.object({
+    questionId: z.string().uuid("Valid question ID is required"),
+    optionText: z.string().min(1, "Option text is required"),
+    isCorrect: z.boolean().default(false),
+    sequenceNumber: z.number().int("Sequence must be a whole number").positive("Sequence must be positive")
+});
+
+// Types for frontend usage
+export type Assessment = {
+    id: string;
+    module_id: string;
+    title: string;
+    description?: string;
+    passing_score: number;
+    time_limit_minutes?: number;
+    sequence_number: number;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+    total_questions?: number;
+};
+
+export type AssessmentQuestion = {
+    id: string;
+    assessment_id: string;
+    question_text: string;
+    question_type: 'multiple_choice' | 'true_false' | 'text_response';
+    sequence_number: number;
+    points: number;
+    created_at: string;
+    updated_at: string;
+    options?: QuestionOption[];
+};
+
+export type QuestionOption = {
+    id: string;
+    question_id: string;
+    option_text: string;
+    is_correct: boolean;
+    sequence_number: number;
+    created_at: string;
+    updated_at: string;
+};
 

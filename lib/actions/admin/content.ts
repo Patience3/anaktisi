@@ -31,9 +31,9 @@ export async function getModuleContent(moduleId: string): Promise<ActionResponse
         const { data, error } = await supabase
             .from("content_items")
             .select(`
-        *,
-        created_by:users(first_name, last_name)
-      `)
+                *,
+                created_by:users(first_name, last_name)
+            `)
             .eq("module_id", validModuleId)
             .order("sequence_number", { ascending: true });
 
@@ -67,9 +67,9 @@ export async function getContentItem(contentId: string): Promise<ActionResponse<
         const { data, error } = await supabase
             .from("content_items")
             .select(`
-        *,
-        created_by:users(first_name, last_name)
-      `)
+                *,
+                created_by:users(first_name, last_name)
+            `)
             .eq("id", validId)
             .single();
 
@@ -232,9 +232,10 @@ export async function createDocumentContent(params: z.infer<typeof DocumentConte
 
         const supabase = await createClient();
 
-        // Format content as JSON with document URL and description
+        // Format content as JSON with document URL, file type and description
         const content = JSON.stringify({
             documentUrl: validParams.documentUrl,
+            fileType: validParams.fileType,
             description: validParams.description
         });
 
@@ -392,6 +393,42 @@ export async function reorderContentItems(moduleId: string): Promise<ActionRespo
 
         return {
             success: true
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
+ * Upload a file to storage
+ * This is a server action that handles file uploads to Supabase storage
+ */
+export async function uploadFile(file: File, path: string): Promise<ActionResponse<string>> {
+    try {
+        // Ensure the user is an admin
+        const { user } = await requireAdmin();
+
+        const supabase = await createClient();
+
+        // In a real implementation, you would upload the file to Supabase storage
+        // const { data, error } = await supabase.storage
+        //    .from('your-bucket')
+        //    .upload(`${path}/${Date.now()}-${file.name}`, file);
+
+        // If error, throw it
+        // if (error) throw error;
+
+        // Return the URL of the uploaded file
+        // const { data: { publicUrl } } = supabase.storage
+        //    .from('your-bucket')
+        //    .getPublicUrl(data.path);
+
+        // For now, return a mock URL
+        const mockUrl = `https://example.com/storage/${path}/${Date.now()}-${encodeURIComponent(file.name)}`;
+
+        return {
+            success: true,
+            data: mockUrl
         };
     } catch (error) {
         return handleServerError(error);
