@@ -213,8 +213,13 @@ export function QuestionForm({ assessmentId, onSuccess, question }: QuestionForm
         try {
             let result;
 
+            // Prepare the data for submission, including options
             const questionData = {
-                ...data,
+                assessmentId: data.assessmentId,
+                questionText: data.questionText,
+                questionType: data.questionType as 'multiple_choice' | 'true_false' | 'text_response',
+                sequenceNumber: data.sequenceNumber,
+                points: data.points,
                 options: options
             };
 
@@ -242,10 +247,13 @@ export function QuestionForm({ assessmentId, onSuccess, question }: QuestionForm
                 if (result.error?.details) {
                     // Set field errors from server response
                     Object.entries(result.error.details).forEach(([field, messages]) => {
-                        form.setError(field as never, {
-                            type: "server",
-                            message: messages[0],
-                        });
+                        if (messages && messages.length > 0) {
+                            const errorMessage = typeof messages[0] === 'string' ? messages[0] : 'Invalid value';
+                            form.setError(field as any, {
+                                type: "server",
+                                message: errorMessage
+                            });
+                        }
                     });
                 }
             }
@@ -303,6 +311,7 @@ export function QuestionForm({ assessmentId, onSuccess, question }: QuestionForm
                                     setQuestionType(value);
                                 }}
                                 defaultValue={field.value}
+                                value={field.value}
                             >
                                 <FormControl>
                                     <SelectTrigger>

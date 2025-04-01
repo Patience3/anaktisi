@@ -1,3 +1,4 @@
+// components/admin/content-list.tsx
 "use client";
 
 import { useState } from "react";
@@ -36,7 +37,7 @@ import {
     FileSymlink,
     ExternalLink,
     Loader2,
-    Eye
+    Eye,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

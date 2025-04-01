@@ -30,6 +30,7 @@ function getErrorDetails(error: unknown): Record<string, string[]> | undefined {
 }
 
 // For server actions only - returns a plain object
+// lib/handlers/error.ts
 export function handleServerError(error: unknown): {
     success: false;
     error: {
@@ -38,8 +39,16 @@ export function handleServerError(error: unknown): {
     };
     status: number;
 } {
-    // Log the error (add proper logging in production)
-    console.error("Server Error:", error);
+    // Log the error safely
+    try {
+        console.error("Server Error:",
+            error instanceof Error
+                ? error.message
+                : "Unknown error"
+        );
+    } catch (loggingError) {
+        console.error("Error during error logging");
+    }
 
     let status = getErrorStatus(error);
     let message = getErrorMessage(error);
@@ -64,7 +73,6 @@ export function handleServerError(error: unknown): {
         status
     };
 }
-
 // For API routes only - returns a NextResponse
 export function handleApiError(error: unknown): NextResponse {
     // Log the error (add proper logging in production)

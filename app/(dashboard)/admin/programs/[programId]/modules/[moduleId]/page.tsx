@@ -14,7 +14,7 @@ import {
     FileText,
     Video,
     Link as LinkIcon,
-    FileSymlink,
+    FileSymlink, ClipboardCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -136,11 +136,12 @@ export default async function ModuleDetails({ params }: ModuleDetailsProps) {
 function AddContentMenu({ programId, moduleId }: { programId: string; moduleId: string }) {
     return (
         <Tabs defaultValue="text" className="w-full">
-            <TabsList className="grid grid-cols-4 mb-4">
+            <TabsList className="grid grid-cols-5 mb-4">
                 <TabsTrigger value="text">Text</TabsTrigger>
                 <TabsTrigger value="video">Video</TabsTrigger>
                 <TabsTrigger value="document">Document</TabsTrigger>
                 <TabsTrigger value="link">Link</TabsTrigger>
+                <TabsTrigger value="assessment">Assessment</TabsTrigger>
             </TabsList>
             <TabsContent value="text" className="space-y-4">
                 <Button asChild>
@@ -171,6 +172,14 @@ function AddContentMenu({ programId, moduleId }: { programId: string; moduleId: 
                     <Link href={`/admin/programs/${programId}/modules/${moduleId}/content/link/create`}>
                         <LinkIcon className="mr-2 h-4 w-4" />
                         Add Link
+                    </Link>
+                </Button>
+            </TabsContent>
+            <TabsContent value="assessment" className="space-y-4">
+                <Button asChild>
+                    <Link href={`/admin/programs/${programId}/modules/${moduleId}/content/assessment/create`}>
+                        <ClipboardCheck className="mr-2 h-4 w-4" />
+                        Add Assessment
                     </Link>
                 </Button>
             </TabsContent>

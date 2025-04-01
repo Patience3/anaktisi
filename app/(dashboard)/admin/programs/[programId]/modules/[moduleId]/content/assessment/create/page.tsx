@@ -8,17 +8,17 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
+import React from "react";
+import { useParams } from "next/navigation";
 
-interface CreateAssessmentPageProps {
-    params: {
-        programId: string;
-        moduleId: string;
-    };
-}
-
-export default function CreateAssessmentPage({ params }: CreateAssessmentPageProps) {
+export default function CreateAssessmentPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const params = useParams();
+
+    // Extract params safely
+    const programId = params.programId as string;
+    const moduleId = params.moduleId as string;
 
     const handleSuccess = (result: { contentItemId: string, assessmentId: string }) => {
         toast({
@@ -27,14 +27,14 @@ export default function CreateAssessmentPage({ params }: CreateAssessmentPagePro
         });
 
         // Redirect to the assessment detail page
-        router.push(`/admin/programs/${params.programId}/modules/${params.moduleId}/content/assessment/${result.assessmentId}`);
+        router.push(`/admin/programs/${programId}/modules/${moduleId}/content/assessment/${result.assessmentId}`);
     };
 
     return (
         <div className="container mx-auto max-w-3xl">
             <div className="mb-6">
                 <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/admin/programs/${params.programId}/modules/${params.moduleId}`} className="flex items-center">
+                    <Link href={`/admin/programs/${programId}/modules/${moduleId}`} className="flex items-center">
                         <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to module
                     </Link>
@@ -50,7 +50,7 @@ export default function CreateAssessmentPage({ params }: CreateAssessmentPagePro
                 </CardHeader>
                 <CardContent>
                     <AssessmentForm
-                        moduleId={params.moduleId}
+                        moduleId={moduleId}
                         onSuccess={handleSuccess}
                     />
                 </CardContent>

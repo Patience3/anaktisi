@@ -245,4 +245,312 @@ export async function deleteAssessment(
     } catch (error) {
         return handleServerError(error);
     }
+
+
+}
+
+// Additional functions to add to lib/actions/admin/assessment.ts
+
+// Get the next available sequence number for questions in an assessment
+export async function getNextQuestionSequence(assessmentId: string): Promise<ActionResponse<number>> {
+    try {
+        // Validate the assessmentId
+        const validAssessmentId = z.string().uuid("Invalid assessment ID").parse(assessmentId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Get the highest sequence number currently in use
+        const { data, error } = await supabase
+            .from("assessment_questions")
+            .select("sequence_number")
+            .eq("assessment_id", validAssessmentId)
+            .order("sequence_number", { ascending: false })
+            .limit(1);
+
+        if (error) {
+            throw error;
+        }
+
+        // If there are no questions yet, start at 1
+        const nextSequence = data.length > 0 ? data[0].sequence_number + 1 : 1;
+
+        return {
+            success: true,
+            data: nextSequence
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+// Create a new question
+export async function createQuestion(params: QuestionWithOptions): Promise<ActionResponse<any>> {
+    try {
+        // Validate the data
+        // Using a custom interface instead of the zod schema directly
+        const { assessmentId, questionText, questionType, sequenceNumber, points, options } = params;
+
+        // Basic validation
+        if (!assessmentId || !questionText || !questionType || !sequenceNumber || !points) {
+            throw new Error("Missing required question fields");
+        }
+
+        // Ensure the user is an admin
+        const { user } = await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Create the question
+        const { data: question, error: questionError } = await supabase
+            .from("assessment_questions")
+            .insert({
+                assessment_id: assessmentId,
+                question_text: questionText,
+                question_type: questionType,
+                sequence_number: sequenceNumber,
+                points
+            })
+            .select()
+            .single();
+
+        if (questionError) {
+            throw questionError;
+        }
+
+        // For multiple choice or true/false questions, create the options
+        if ((questionType === 'multiple_choice' || questionType === 'true_false') && options && options.length > 0) {
+            const formattedOptions = options.map(option => ({
+                question_id: question.id,
+                option_text: option.optionText,
+                is_correct: option.isCorrect,
+                sequence_number: option.sequenceNumber
+            }));
+
+            const { error: optionsError } = await supabase
+                .from("question_options")
+                .insert(formattedOptions);
+
+            if (optionsError) {
+                // If there's an error with options, attempt to clean up the question
+                await supabase
+                    .from("assessment_questions")
+                    .delete()
+                    .eq("id", question.id);
+
+                throw optionsError;
+            }
+        }
+
+        // Refresh the assessment page
+        revalidatePath(`/admin/programs/*/modules/*/content/assessment/${assessmentId}`);
+
+        return {
+            success: true,
+            data: question
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+// Update an existing question
+export async function updateQuestion(questionId: string, params: QuestionWithOptions): Promise<ActionResponse<any>> {
+    try {
+        // Validate the data and ID
+        const validId = z.string().uuid("Invalid ID format").parse(questionId);
+        const { assessmentId, questionText, questionType, sequenceNumber, points, options } = params;
+
+        // Basic validation
+        if (!assessmentId || !questionText || !questionType || !sequenceNumber || !points) {
+            throw new Error("Missing required question fields");
+        }
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Update the question
+        const { data: question, error: questionError } = await supabase
+            .from("assessment_questions")
+            .update({
+                question_text: questionText,
+                question_type: questionType,
+                sequence_number: sequenceNumber,
+                points,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", validId)
+            .select()
+            .single();
+
+        if (questionError) {
+            throw questionError;
+        }
+
+        // For multiple choice or true/false questions, update the options
+        if (questionType === 'multiple_choice' || questionType === 'true_false') {
+            if (options && options.length > 0) {
+                // First, delete all existing options for this question
+                const { error: deleteError } = await supabase
+                    .from("question_options")
+                    .delete()
+                    .eq("question_id", validId);
+
+                if (deleteError) {
+                    throw deleteError;
+                }
+
+                // Then, insert the new/updated options
+                const formattedOptions = options.map(option => ({
+                    question_id: validId,
+                    option_text: option.optionText,
+                    is_correct: option.isCorrect,
+                    sequence_number: option.sequenceNumber
+                }));
+
+                const { error: insertError } = await supabase
+                    .from("question_options")
+                    .insert(formattedOptions);
+
+                if (insertError) {
+                    throw insertError;
+                }
+            }
+        }
+
+        // Refresh the assessment page
+        revalidatePath(`/admin/programs/*/modules/*/content/assessment/${assessmentId}`);
+
+        return {
+            success: true,
+            data: question
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+// Define the interface for the question with options
+interface QuestionWithOptions {
+    assessmentId: string;
+    questionText: string;
+    questionType: 'multiple_choice' | 'true_false' | 'text_response';
+    sequenceNumber: number;
+    points: number;
+    options?: {
+        id?: string;
+        optionText: string;
+        isCorrect: boolean;
+        sequenceNumber: number;
+    }[];
+}
+// Add to lib/actions/admin/assessment.ts
+
+// Get the next available sequence number for content items in a module
+export async function getNextContentSequence(moduleId: string): Promise<ActionResponse<number>> {
+    try {
+        // Validate the moduleId
+        const validModuleId = z.string().uuid("Invalid module ID").parse(moduleId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Get the highest sequence number currently in use
+        const { data, error } = await supabase
+            .from("content_items")
+            .select("sequence_number")
+            .eq("module_id", validModuleId)
+            .order("sequence_number", { ascending: false })
+            .limit(1);
+
+        if (error) {
+            throw error;
+        }
+
+        // If there are no content items yet, start at 1
+        const nextSequence = data.length > 0 ? data[0].sequence_number + 1 : 1;
+
+        return {
+            success: true,
+            data: nextSequence
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+// Add to lib/actions/admin/assessment.ts
+
+// Get a question by ID with its options
+export async function getQuestionById(questionId: string): Promise<ActionResponse<any>> {
+    try {
+        // Validate the id
+        const validId = z.string().uuid("Invalid ID format").parse(questionId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Get the question with its options
+        const { data, error } = await supabase
+            .from("assessment_questions")
+            .select(`
+                *,
+                options:question_options(*)
+            `)
+            .eq("id", validId)
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        if (!data) {
+            throw new Error("Question not found");
+        }
+
+        return {
+            success: true,
+            data
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+// Delete a question
+export async function deleteQuestion(questionId: string): Promise<ActionResponse<null>> {
+    try {
+        // Validate the ID
+        const validId = z.string().uuid("Invalid ID format").parse(questionId);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Delete the question (this will cascade to options)
+        const { error } = await supabase
+            .from("assessment_questions")
+            .delete()
+            .eq("id", validId);
+
+        if (error) {
+            throw error;
+        }
+
+        return {
+            success: true,
+            data: null
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
 }
