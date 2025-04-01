@@ -314,3 +314,50 @@ export type QuestionOption = {
     updated_at: string;
 };
 
+// Add this to your lib/validations.ts file
+
+// Assessment creation schema
+export const AssessmentSchema = z.object({
+    moduleId: z.string().uuid("Valid module ID is required"),
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    instructions: z.string().optional(),
+    passingScore: z.number().int().min(1, "Passing score must be at least 1"),
+    timeLimitMinutes: z.number().int().positive().optional(),
+    sequenceNumber: z.number().int().positive("Sequence number is required")
+});
+
+// Question creation schema
+export const QuestionSchema = z.object({
+    assessmentId: z.string().uuid("Valid assessment ID is required"),
+    questionText: z.string().min(5, "Question text must be at least 5 characters"),
+    questionType: z.enum(['multiple_choice', 'true_false', 'text_response'], {
+        errorMap: () => ({ message: "Question type must be multiple_choice, true_false, or text_response" })
+    }),
+    sequenceNumber: z.number().int().positive("Sequence number is required"),
+    points: z.number().int().min(1, "Points must be at least 1")
+});
+
+// Question option schema
+export const OptionSchema = z.object({
+    questionId: z.string().uuid("Valid question ID is required"),
+    optionText: z.string().min(1, "Option text is required"),
+    isCorrect: z.boolean().default(false),
+    sequenceNumber: z.number().int().positive("Sequence number is required")
+});
+
+
+export interface AssessmentWithContent extends Assessment {
+    content_item?: ContentItem;
+    questions?: AssessmentQuestion[];
+}
+
+
+// Form option type (for client-side use)
+export interface FormOption {
+    id?: string;
+    optionText: string;
+    isCorrect: boolean;
+    sequenceNumber: number;
+}
+
