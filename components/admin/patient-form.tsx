@@ -1,7 +1,7 @@
 // components/admin/patient-form.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,21 +26,34 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getAllPrograms } from "@/lib/actions/admin/program";
+
+// Extend the CreatePatientSchema to include optional programId
+const ExtendedCreatePatientSchema = CreatePatientSchema.extend({
+    programId: z.string().uuid("Valid program ID is required").optional(),
+});
 
 // Infer the type from the Zod schema
-type PatientFormValues = z.infer<typeof CreatePatientSchema>;
+type PatientFormValues = z.infer<typeof ExtendedCreatePatientSchema>;
 
 interface PatientFormProps {
     onSuccess: (tempPassword: string) => void;
 }
 
+interface Program {
+    id: string;
+    title: string;
+}
+
 export function PatientForm({ onSuccess }: PatientFormProps) {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [programs, setPrograms] = useState<Program[]>([]);
+    const [isLoadingPrograms, setIsLoadingPrograms] = useState(true);
 
     // Initialize React Hook Form with Zod resolver
     const form = useForm<PatientFormValues>({
-        resolver: zodResolver(CreatePatientSchema),
+        resolver: zodResolver(ExtendedCreatePatientSchema),
         defaultValues: {
             email: "",
             firstName: "",
@@ -48,8 +61,34 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
             dateOfBirth: "",
             gender: "",
             phone: "",
+            programId: undefined,
         },
     });
+
+    // Fetch programs when component mounts
+    useEffect(() => {
+        async function fetchPrograms() {
+            setIsLoadingPrograms(true);
+            try {
+                const result = await getAllPrograms();
+
+                if (result.success && result.data) {
+                    setPrograms(result.data.map(p => ({
+                        id: p.id,
+                        title: p.title
+                    })));
+                } else {
+                    console.error("Failed to fetch programs:", result.error);
+                }
+            } catch (e) {
+                console.error("Error fetching programs:", e);
+            } finally {
+                setIsLoadingPrograms(false);
+            }
+        }
+
+        fetchPrograms();
+    }, []);
 
     async function onSubmit(data: PatientFormValues) {
         setIsLoading(true);
@@ -151,9 +190,6 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
                                     onChange={(e) => field.onChange(e.target.value || undefined)}
                                 />
                             </FormControl>
-                            {/*<FormDescription>*/}
-                            {/*    Patient must be between 15 and 60 years old*/}
-                            {/*</FormDescription>*/}
                             <FormMessage />
                         </FormItem>
                     )}
@@ -199,6 +235,50 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
                                     onChange={(e) => field.onChange(e.target.value || undefined)}
                                 />
                             </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="programId"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Initial Program (Optional)</FormLabel>
+                            <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                            >
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a program (optional)" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {isLoadingPrograms ? (
+                                        <SelectItem value="loading" disabled>
+                                            Loading programs...
+                                        </SelectItem>
+                                    ) : programs.length > 0 ? (
+                                        <>
+                                            <SelectItem value="">No program</SelectItem>
+                                            {programs.map(program => (
+                                                <SelectItem key={program.id} value={program.id}>
+                                                    {program.title}
+                                                </SelectItem>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <SelectItem value="none" disabled>
+                                            No programs available
+                                        </SelectItem>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                            <FormDescription>
+                                Optionally assign a treatment program at creation
+                            </FormDescription>
                             <FormMessage />
                         </FormItem>
                     )}

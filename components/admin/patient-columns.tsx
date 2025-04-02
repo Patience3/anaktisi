@@ -23,6 +23,15 @@ export type Patient = {
   last_name: string;
   is_active: boolean;
   created_at: string;
+  date_of_birth?: string;
+  gender?: string;
+  phone?: string;
+  role: string;
+  program?: {
+    id: string;
+    title: string;
+    status: string;
+  } | null;
 };
 
 export const columns: ColumnDef<Patient>[] = [
@@ -41,6 +50,25 @@ export const columns: ColumnDef<Patient>[] = [
               {patient.email}
             </div>
           </div>
+      );
+    },
+  },
+
+  // Program column
+  {
+    accessorKey: "program",
+    header: "Program",
+    cell: ({ row }) => {
+      const patient = row.original;
+      return patient.program ? (
+          <div>
+            <div className="font-medium">{patient.program.title}</div>
+            <Badge variant="outline" className="capitalize">
+              {patient.program.status.replace('_', ' ')}
+            </Badge>
+          </div>
+      ) : (
+          <Badge variant="secondary">No Program</Badge>
       );
     },
   },
