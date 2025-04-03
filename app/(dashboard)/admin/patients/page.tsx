@@ -1,44 +1,100 @@
 // app/(dashboard)/admin/patients/page.tsx
-import { getAllPatients } from "@/lib/actions/admin/patient";
-import { requireAdmin } from "@/lib/auth-utils";
-import { PatientTable } from "@/components/admin/patient-table";
-import { columns } from "@/components/admin/patient-columns";
-import { CreatePatientDialog } from "@/components/admin/create-patient-dialog";
-import { Button } from "@/components/ui/button";
 import { Suspense } from "react";
+import { getAllPatients, getCategoriesForFilter } from "@/lib/actions/admin/patient";
+import { requireAdmin } from "@/lib/auth-utils";
+import { Separator } from "@/components/ui/separator";
 import { TableSkeleton } from "@/components/shared/table-skeleton";
+import { PatientsClient } from "./patients-client";
+import { notFound } from "next/navigation";
+import { Metadata } from "next";
 
-export default async function PatientsPage() {
-    // Check authorization
-    await requireAdmin();
+export const metadata: Metadata = {
+    title: "Patients | Admin Dashboard",
+    description: "Manage patient accounts and treatment categories",
+};
 
-    return (
-        <div className="container mx-auto">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Patients</h1>
-                <CreatePatientDialog>
-                    <Button>Add New Patient</Button>
-                </CreatePatientDialog>
-            </div>
-
-            <Suspense fallback={<TableSkeleton columns={columns.length} rows={5} />}>
-                <PatientTableContainer  />
-            </Suspense>
-        </div>
-    );
+interface PatientsPageProps {
+    searchParams: {
+        search?: string;
+        category?: string;
+    };
 }
 
-// This is a separate async component to handle the data fetching while allowing the page UI to load immediately
-// Rather than doing everything in 1 component (PatientsPage), this approach fetches data at the component level, allowing the page shell to render immediately while the table shows a loading state
-async function PatientTableContainer() {
-    // Fetch all patients
+export default async function PatientsPage({ searchParams }: PatientsPageProps) {
+    try {
+        // Check authorization
+        await requireAdmin();
+
+        // Get search term and category filter from URL params
+        const searchTerm = searchParams.search || undefined;
+        const categoryId = searchParams.category || undefined;
+
+        // Fetch available categories for the filter dropdown
+        const categoriesResponse = await getCategoriesForFilter();
+
+        if (!categoriesResponse.success) {
+            throw new Error(categoriesResponse.error?.message || "Failed to load categories");
+        }
+
+        return (
+            <div className="container mx-auto py-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Patients</h1>
+                        <p className="text-muted-foreground">
+                            Manage patient accounts and treatment categories
+                        </p>
+                    </div>
+                </div>
+
+                <Separator className="my-6" />
+
+                <Suspense fallback={<TableSkeleton columns={5} rows={10} />}>
+                    <PatientsTableContainer
+                        searchTerm={searchTerm}
+                        categoryId={categoryId}
+                        availableCategories={categoriesResponse.data || []}
+                    />
+                </Suspense>
+            </div>
+        );
+    } catch (error) {
+        console.error("Error in patients page:", error);
+        notFound();
+    }
+}
+
+// This is a separate async component to handle the data fetching
+async function PatientsTableContainer({
+                                          searchTerm,
+                                          categoryId,
+                                          availableCategories
+                                      }: {
+    searchTerm?: string,
+    categoryId?: string,
+    availableCategories: Array<{id: string, name: string}>
+}) {
+    // Fetch patients with filters applied
     const response = await getAllPatients();
 
-    const patients = response.success && response.data ? response.data : [];
+    if (!response.success) {
+        return (
+            <div className="rounded-md bg-destructive/15 p-4">
+                <p className="text-sm text-destructive">
+                    {response.error?.message || "Failed to load patients"}
+                </p>
+            </div>
+        );
+    }
+
+    const patients = response.data || [];
 
     return (
-        <div className="">
-            <PatientTable columns={columns} data={patients} />
-        </div>
+        <PatientsClient
+            patients={patients}
+            availableCategories={availableCategories}
+            initialSearch={searchTerm}
+            initialCategoryFilter={categoryId}
+        />
     );
 }

@@ -1,19 +1,20 @@
-// app/types/action.d.ts
+// types/action.d.ts
 import { ZodSchema } from "zod";
 import { createClient } from "@/utils/supabase/server";
+import { SupabaseClient } from '@supabase/supabase-js';
 
 // Action handler options and return types
-interface ActionOptions<T> {
+interface ActionOptions<T = any> {
     params?: T;
     schema?: ZodSchema<T>;
     authorize?: boolean;
-    requiredRole?: 'admin' | 'patient';
+    requiredRole?: 'admin' | 'patient' | string;
 }
 
 // Action handler success result
-interface ActionSuccess<T> {
+interface ActionSuccess<T = any> {
     params: T;
-    supabase: Awaited<ReturnType<typeof createClient>>;
+    supabase: SupabaseClient;
     session: {
         user: {
             id: string;
@@ -23,6 +24,39 @@ interface ActionSuccess<T> {
     } | null;
     user: SupabaseUser | null;
     profile: UserProfile | null;
+}
+
+// Type for Supabase user from auth
+interface SupabaseUser {
+    id: string;
+    email: string;
+}
+
+// Type for user profile
+interface UserProfile {
+    id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    date_of_birth?: string;
+    gender?: string;
+    phone?: string;
+    profile_photo_url?: string;
+}
+
+// Response type for all server actions
+interface ActionResponse<T = any> {
+    success: boolean;
+    data?: T;
+    error?: {
+        message: string;
+        details?: Record<string, string[]>;
+    };
+    status?: number;
 }
 
 // Auth response types
@@ -44,9 +78,12 @@ interface CreatePatientParams {
     dateOfBirth?: string;
     gender?: string;
     phone?: string;
+    programId?: string;
 }
 
-interface SignUpCredentials extends AuthCredentials {
+interface SignUpCredentials {
+    email: string;
+    password: string;
     name: string;
     username: string;
 }
@@ -82,7 +119,7 @@ interface UpdateModuleParams extends CreateModuleParams {
 interface CreateContentParams {
     moduleId: string;
     title: string;
-    contentType: 'video' | 'text' | 'assessment';
+    contentType: 'video' | 'text' | 'document' | 'link' | 'assessment';
     content: string;
     sequenceNumber: number;
 }
