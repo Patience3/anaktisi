@@ -8,13 +8,13 @@ import { requireAdmin } from "@/lib/auth-utils";
 import { z } from "zod";
 
 // Define proper type for the Category and Program interfaces
-interface Category {
+export interface Category {
     id: string;
     name: string;
     description?: string;
 }
 
-interface Program {
+export interface Program {
     id: string;
     title: string;
     category_id: string;
@@ -41,12 +41,95 @@ const CategoryEnrollmentSchema = z.object({
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Start date must be in YYYY-MM-DD format")
 });
 
-// Get patient's current enrollment in a category
+/**
+ * Get patient's current enrollment in a category
+ */
 export async function getPatientCurrentEnrollment(patientId: string): Promise<ActionResponse<EnrollmentDetails | null>> {
     try {
         // Validate the patientId
         const validPatientId = z.string().uuid("Invalid patient ID").parse(patientId);
 
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Get current active category enrollment
+        const { data, error } = await supabase
+            .from("patient_category_enrollments")
+            .select(`
+                id, 
+                patient_id,
+                category_id,
+                start_date, 
+                expected_end_date,
+                status,
+                program_categories:category_id(id, name)
+            `)
+            .eq("patient_id", validPatientId)
+            .in("status", ["in_progress", "assigned"])
+            .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 is the error code for "no rows returned"
+            throw error;
+        }
+
+        if (!data) {
+            return {
+                success: true,
+                data: null
+            };
+        }
+
+        // Create the enrollment response with proper type handling
+        const enrollment: EnrollmentDetails = {
+            id: data.id,
+            patient_id: data.patient_id,
+            category_id: data.category_id,
+            category_name: "Unknown Category", // Default value
+            start_date: data.start_date,
+            expected_end_date: data.expected_end_date,
+            status: data.status,
+            programs: []
+        };
+
+        // Try to get category details if available
+        if (data.program_categories &&
+            typeof data.program_categories === 'object' &&
+            data.program_categories !== null) {
+
+            // If program_categories has name property, use it
+            if ('name' in data.program_categories && data.program_categories.name) {
+                enrollment.category_name = String(data.program_categories.name);
+            }
+        }
+
+        // Fetch all programs in this category
+        const { data: programsData, error: programsError } = await supabase
+            .from("treatment_programs")
+            .select("id, title, description, duration_days, category_id")
+            .eq("category_id", data.category_id)
+            .eq("is_active", true);
+
+        if (!programsError && programsData) {
+            enrollment.programs = programsData;
+        }
+
+        // Return the typed enrollment data
+        return {
+            success: true,
+            data: enrollment
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
+ * Get all available program categories
+ */
+export async function getAllCategories(): Promise<ActionResponse<Category[]>> {
+    try {
         // Ensure the user is an admin
         await requireAdmin();
 
@@ -71,7 +154,9 @@ export async function getPatientCurrentEnrollment(patientId: string): Promise<Ac
     }
 }
 
-// Get programs by category
+/**
+ * Get programs by category
+ */
 export async function getProgramsByCategory(categoryId: string): Promise<ActionResponse<Program[]>> {
     try {
         // Validate the categoryId
@@ -103,7 +188,129 @@ export async function getProgramsByCategory(categoryId: string): Promise<ActionR
     }
 }
 
-// Enroll patient in a specific program within their category
+/**
+ * Assign patient to a program category
+ */
+export async function assignPatientToCategory(params: z.infer<typeof CategoryEnrollmentSchema>): Promise<ActionResponse<any>> {
+    try {
+        // Validate the data
+        const validParams = CategoryEnrollmentSchema.parse(params);
+
+        // Ensure the user is an admin
+        const { user } = await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Check if patient exists
+        const { data: patient, error: patientError } = await supabase
+            .from("users")
+            .select("id")
+            .eq("id", validParams.patientId)
+            .eq("role", "patient")
+            .single();
+
+        if (patientError) {
+            throw new Error("Patient not found");
+        }
+
+        // Check if category exists
+        const { data: category, error: categoryError } = await supabase
+            .from("program_categories")
+            .select("id, name")
+            .eq("id", validParams.categoryId)
+            .single();
+
+        if (categoryError) {
+            throw new Error("Category not found");
+        }
+
+        // Check if patient is already enrolled in any category
+        const { data: existingEnrollment, error: enrollmentError } = await supabase
+            .from("patient_category_enrollments")
+            .select("id, status")
+            .eq("patient_id", validParams.patientId)
+            .not("status", "eq", "completed")
+            .not("status", "eq", "dropped");
+
+        if (enrollmentError && enrollmentError.code !== 'PGRST116') {
+            throw enrollmentError;
+        }
+
+        // If patient is already enrolled, update the existing enrollment
+        if (existingEnrollment && existingEnrollment.length > 0) {
+            // First mark existing enrollment as dropped
+            const { error: updateError } = await supabase
+                .from("patient_category_enrollments")
+                .update({
+                    status: "dropped",
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", existingEnrollment[0].id);
+
+            if (updateError) {
+                throw updateError;
+            }
+
+            // Clear existing program progress data
+            const { error: progEnrollError } = await supabase
+                .from("patient_enrollments")
+                .update({
+                    status: "dropped",
+                    updated_at: new Date().toISOString()
+                })
+                .eq("patient_id", validParams.patientId)
+                .in("status", ["assigned", "in_progress"]);
+
+            if (progEnrollError) {
+                console.error("Error updating program enrollments:", progEnrollError);
+                // Continue even if this fails
+            }
+
+            // Clear existing module progress
+            const { error: progressError } = await supabase
+                .from("module_progress")
+                .delete()
+                .eq("patient_id", validParams.patientId);
+
+            if (progressError) {
+                console.error("Error clearing module progress:", progressError);
+                // Continue even if this fails
+            }
+        }
+
+        // Create new category enrollment
+        const { data: enrollment, error: createError } = await supabase
+            .from("patient_category_enrollments")
+            .insert({
+                patient_id: validParams.patientId,
+                category_id: validParams.categoryId,
+                enrolled_by: user.id,
+                start_date: validParams.startDate,
+                status: "in_progress"
+            })
+            .select()
+            .single();
+
+        if (createError) {
+            throw createError;
+        }
+
+        // Revalidate patients and programs pages
+        revalidatePath("/admin/patients");
+        revalidatePath(`/admin/patients/${validParams.patientId}`);
+
+        return {
+            success: true,
+            data: enrollment
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
+ * Enroll patient in a specific program within their category
+ */
 export async function enrollPatientInProgram(
     patientId: string,
     programId: string,
@@ -226,200 +433,3 @@ export async function enrollPatientInProgram(
         return handleServerError(error);
     }
 }
-
-// Get current active category enrollment
-const { data, error } = await supabase
-    .from("patient_category_enrollments")
-    .select(`
-                id, 
-                patient_id,
-                category_id,
-                start_date, 
-                expected_end_date,
-                status,
-                program_categories:category_id(id, name)
-            `)
-    .eq("patient_id", validPatientId)
-    .in("status", ["in_progress", "assigned"])
-    .single();
-
-if (error && error.code !== 'PGRST116') { // PGRST116 is the error code for "no rows returned"
-    throw error;
-}
-
-if (!data) {
-    return {
-        success: true,
-        data: null
-    };
-}
-
-// Create the enrollment response with proper type handling
-const enrollment: EnrollmentDetails = {
-    id: data.id,
-    patient_id: data.patient_id,
-    category_id: data.category_id,
-    category_name: "Unknown Category", // Default value
-    start_date: data.start_date,
-    expected_end_date: data.expected_end_date,
-    status: data.status,
-    programs: []
-};
-
-// Try to get category details if available
-if (data.program_categories &&
-    typeof data.program_categories === 'object' &&
-    data.program_categories !== null) {
-
-    // If program_categories has name property, use it
-    if ('name' in data.program_categories && data.program_categories.name) {
-        enrollment.category_name = String(data.program_categories.name);
-    }
-}
-
-// Fetch all programs in this category
-const { data: programsData, error: programsError } = await supabase
-    .from("treatment_programs")
-    .select("id, title, description, duration_days, category_id")
-    .eq("category_id", data.category_id)
-    .eq("is_active", true);
-
-if (!programsError && programsData) {
-    enrollment.programs = programsData;
-}
-
-// Return the typed enrollment data
-return {
-    success: true,
-    data: enrollment
-};
-} catch (error) {
-    return handleServerError(error);
-}
-}
-
-// Assign patient to a program category
-export async function assignPatientToCategory(params: z.infer<typeof CategoryEnrollmentSchema>): Promise<ActionResponse<any>> {
-    try {
-        // Validate the data
-        const validParams = CategoryEnrollmentSchema.parse(params);
-
-        // Ensure the user is an admin
-        const { user } = await requireAdmin();
-
-        const supabase = await createClient();
-
-        // Check if patient exists
-        const { data: patient, error: patientError } = await supabase
-            .from("users")
-            .select("id")
-            .eq("id", validParams.patientId)
-            .eq("role", "patient")
-            .single();
-
-        if (patientError) {
-            throw new Error("Patient not found");
-        }
-
-        // Check if category exists
-        const { data: category, error: categoryError } = await supabase
-            .from("program_categories")
-            .select("id, name")
-            .eq("id", validParams.categoryId)
-            .single();
-
-        if (categoryError) {
-            throw new Error("Category not found");
-        }
-
-        // Check if patient is already enrolled in any category
-        const { data: existingEnrollment, error: enrollmentError } = await supabase
-            .from("patient_category_enrollments")
-            .select("id, status")
-            .eq("patient_id", validParams.patientId)
-            .not("status", "eq", "completed")
-            .not("status", "eq", "dropped");
-
-        if (enrollmentError && enrollmentError.code !== 'PGRST116') {
-            throw enrollmentError;
-        }
-
-        // If patient is already enrolled, update the existing enrollment
-        if (existingEnrollment && existingEnrollment.length > 0) {
-            // First mark existing enrollment as dropped
-            const { error: updateError } = await supabase
-                .from("patient_category_enrollments")
-                .update({
-                    status: "dropped",
-                    updated_at: new Date().toISOString()
-                })
-                .eq("id", existingEnrollment[0].id);
-
-            if (updateError) {
-                throw updateError;
-            }
-
-            // Clear existing program progress data
-            const { error: progEnrollError } = await supabase
-                .from("patient_enrollments")
-                .update({
-                    status: "dropped",
-                    updated_at: new Date().toISOString()
-                })
-                .eq("patient_id", validParams.patientId)
-                .in("status", ["assigned", "in_progress"]);
-
-            if (progEnrollError) {
-                console.error("Error updating program enrollments:", progEnrollError);
-                // Continue even if this fails
-            }
-
-            // Clear existing module progress
-            const { error: progressError } = await supabase
-                .from("module_progress")
-                .delete()
-                .eq("patient_id", validParams.patientId);
-
-            if (progressError) {
-                console.error("Error clearing module progress:", progressError);
-                // Continue even if this fails
-            }
-        }
-
-        // Create new category enrollment
-        const { data: enrollment, error: createError } = await supabase
-            .from("patient_category_enrollments")
-            .insert({
-                patient_id: validParams.patientId,
-                category_id: validParams.categoryId,
-                enrolled_by: user.id,
-                start_date: validParams.startDate,
-                status: "in_progress"
-            })
-            .select()
-            .single();
-
-        if (createError) {
-            throw createError;
-        }
-
-        // Revalidate patients and programs pages
-        revalidatePath("/admin/patients");
-        revalidatePath(`/admin/patients/${validParams.patientId}`);
-
-        return {
-            success: true,
-            data: enrollment
-        };
-    } catch (error) {
-        return handleServerError(error);
-    }
-}
-
-// Get all available program categories
-export async function getAllCategories(): Promise<ActionResponse<Category[]>> {
-    try {
-        // Ensure the user is an admin
-        await requireAdmin();
-
-        const supabase = await createClient();

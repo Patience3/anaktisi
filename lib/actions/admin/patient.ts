@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { handleServerError } from "@/lib/handlers/error";
 import { requireAdmin } from "@/lib/auth-utils";
 import { z } from "zod";
+import { CreatePatientSchema } from "@/lib/validations";
 
 // Patient type definition
 export interface Patient {
@@ -31,11 +32,40 @@ const UpdatePatientStatusSchema = z.object({
     isActive: z.boolean()
 });
 
+// Edit patient form validation schema
+const EditPatientSchema = z.object({
+    patientId: z.string().uuid("Invalid patient ID"),
+    firstName: z.string().min(2, "First name must be at least 2 characters"),
+    lastName: z.string().min(2, "Last name must be at least 2 characters"),
+    email: z.string().email("Valid email is required"),
+    isActive: z.boolean().default(true),
+    dateOfBirth: z.string().optional(),
+    gender: z.string().optional(),
+    phone: z.string().optional(),
+});
+
 // Category assignment validation schema
 const AssignCategorySchema = z.object({
     patientId: z.string().uuid("Invalid patient ID"),
     categoryId: z.string().uuid("Invalid category ID")
 });
+
+/**
+ * Helper function to safely extract category name
+ */
+function getCategoryName(programCategories: any): string {
+    // Handle if it's an array
+    if (Array.isArray(programCategories) && programCategories.length > 0) {
+        return programCategories[0].name || "Unknown Category";
+    }
+
+    // Handle if it's an object
+    if (programCategories && typeof programCategories === 'object') {
+        return programCategories.name || "Unknown Category";
+    }
+
+    return "Unknown Category";
+}
 
 /**
  * Retrieve all patients from the database
@@ -46,12 +76,16 @@ export async function getAllPatients(
     categoryId?: string
 ): Promise<ActionResponse<Patient[]>> {
     try {
+        console.log("Starting getAllPatients");
+
         // Ensure the user is an admin
         await requireAdmin();
+        console.log("Admin check passed");
 
         const supabase = await createClient();
+        console.log("Supabase client created");
 
-        // Build the query
+        // Build the query and log it
         let query = supabase
             .from("users")
             .select(`
@@ -73,54 +107,84 @@ export async function getAllPatients(
             `)
             .eq("role", "patient")
             .order("created_at", { ascending: false });
+        console.log("Query built");
 
         // Apply name search filter if provided
         if (searchTerm) {
             query = query.or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
+            console.log("Search filter applied:", searchTerm);
         }
 
         // Get the results
+        console.log("Executing query...");
         const { data, error } = await query;
+        console.log("Query executed");
 
         if (error) {
+            console.error("Database error:", error);
             throw error;
         }
 
-        // Transform data to include category information
-        const patients: Patient[] = data.map(patient => {
-            // Get the active category if any
-            const activeCategory = patient.patient_categories && patient.patient_categories.length > 0
-                ? patient.patient_categories[0] // Take the first category assignment
-                : null;
-
-            // Create the patient object with category info if available
-            const patientWithCategory: Patient = {
-                ...patient,
-                category: activeCategory && activeCategory.program_categories
-                    ? {
-                        id: activeCategory.category_id,
-                        name: activeCategory.program_categories.name || "Unknown Category"
-                    }
-                    : null
+        console.log("Data received:", data ? data.length : 0, "records");
+        if (!data) {
+            return {
+                success: true,
+                data: []
             };
+        }
 
-            // Filter by category if needed
-            if (categoryId && (!patientWithCategory.category || patientWithCategory.category.id !== categoryId)) {
-                return null; // Will be filtered out below
+        // Transform data to include category information
+        console.log("Processing patient data...");
+        const patients: Patient[] = [];
+
+        for (const patient of data) {
+            console.log("Processing patient:", patient.id);
+            let category = null;
+
+            // Get the active category if any
+            if (patient.patient_categories &&
+                Array.isArray(patient.patient_categories) &&
+                patient.patient_categories.length > 0) {
+
+                const activeCategory = patient.patient_categories[0];
+                console.log("Found active category:", activeCategory.id);
+
+                if (activeCategory && activeCategory.program_categories) {
+                    console.log("Program categories:", activeCategory.program_categories);
+                    category = {
+                        id: activeCategory.category_id,
+                        name: getCategoryName(activeCategory.program_categories)
+                    };
+                    console.log("Category extracted:", category);
+                }
             }
 
-            return patientWithCategory;
-        }).filter(Boolean) as Patient[]; // Remove null entries (filtered out patients)
+            // Skip if filtering by category and this patient doesn't match
+            if (categoryId && (!category || category.id !== categoryId)) {
+                console.log("Filtering out patient due to category mismatch");
+                continue;
+            }
 
+            // Create patient object with category
+            const patientWithCategory: Patient = {
+                ...patient,
+                category
+            };
+
+            patients.push(patientWithCategory);
+            console.log("Patient added to result set");
+        }
+
+        console.log("Processing complete, returning", patients.length, "patients");
         return {
             success: true,
             data: patients
         };
     } catch (error) {
+        console.error("Error in getAllPatients:", error);
         return handleServerError(error);
     }
 }
-
 /**
  * Get a single patient by ID
  */
@@ -162,20 +226,27 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
             throw new Error("Patient not found");
         }
 
-        // Get the active category if any
-        const activeCategory = data.patient_categories && data.patient_categories.length > 0
-            ? data.patient_categories[0] // Take the first category assignment
-            : null;
+        let category = null;
 
-        // Create the patient object with category info if available
+        // Get the active category if any
+        if (data.patient_categories &&
+            Array.isArray(data.patient_categories) &&
+            data.patient_categories.length > 0) {
+
+            const activeCategory = data.patient_categories[0];
+
+            if (activeCategory && activeCategory.program_categories) {
+                category = {
+                    id: activeCategory.category_id,
+                    name: getCategoryName(activeCategory.program_categories)
+                };
+            }
+        }
+
+        // Create the patient object with category info
         const patient: Patient = {
             ...data,
-            category: activeCategory && activeCategory.program_categories
-                ? {
-                    id: activeCategory.category_id,
-                    name: activeCategory.program_categories.name || "Unknown Category"
-                }
-                : null
+            category
         };
 
         return {
@@ -193,7 +264,7 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
 export async function updatePatientStatus(
     patientId: string,
     isActive: boolean
-): Promise<ActionResponse> {
+): Promise<ActionResponse<{ updated: boolean }>> {
     try {
         // Validate input
         const validData = UpdatePatientStatusSchema.parse({ patientId, isActive });
@@ -230,12 +301,61 @@ export async function updatePatientStatus(
 }
 
 /**
+ * Update patient information
+ */
+export async function updatePatient(
+    data: z.infer<typeof EditPatientSchema>
+): Promise<ActionResponse<{ updated: boolean }>> {
+    try {
+        // Validate the patient data
+        const validData = EditPatientSchema.parse(data);
+
+        // Ensure the user is an admin
+        await requireAdmin();
+
+        const supabase = await createClient();
+
+        // Update patient data
+        const { error } = await supabase
+            .from("users")
+            .update({
+                first_name: validData.firstName,
+                last_name: validData.lastName,
+                email: validData.email,
+                is_active: validData.isActive,
+                date_of_birth: validData.dateOfBirth || null,
+                gender: validData.gender || null,
+                phone: validData.phone || null,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", validData.patientId)
+            .eq("role", "patient");
+
+        if (error) {
+            throw error;
+        }
+
+        // Revalidate the patients pages to refresh the data
+        revalidatePath("/admin/patients");
+        revalidatePath(`/admin/patients/${validData.patientId}`);
+        revalidatePath(`/admin/patients/${validData.patientId}/edit`);
+
+        return {
+            success: true,
+            data: { updated: true }
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
  * Assign a patient to a treatment category
  */
 export async function assignPatientToCategory(
     patientId: string,
     categoryId: string
-): Promise<ActionResponse> {
+): Promise<ActionResponse<any>> {
     try {
         // Validate the data
         const validData = AssignCategorySchema.parse({ patientId, categoryId });
@@ -252,6 +372,7 @@ export async function assignPatientToCategory(
             .eq("patient_id", validData.patientId);
 
         if (deleteError) {
+            console.error("Delete error:", deleteError);
             throw deleteError;
         }
 
@@ -268,6 +389,7 @@ export async function assignPatientToCategory(
             .single();
 
         if (error) {
+            console.error("Insert error:", error);
             throw error;
         }
 
@@ -305,7 +427,79 @@ export async function getCategoriesForFilter(): Promise<ActionResponse<{id: stri
 
         return {
             success: true,
-            data: data
+            data: data || []
+        };
+    } catch (error) {
+        return handleServerError(error);
+    }
+}
+
+/**
+ * Create a new patient account
+ */
+export async function createPatientAccount(
+    data: z.infer<typeof CreatePatientSchema> & { programId?: string }
+): Promise<ActionResponse<{ tempPassword: string }>> {
+    try {
+        // Ensure the user is an admin
+        const { user: adminUser } = await requireAdmin();
+
+        // Validate patient data
+        const validData = CreatePatientSchema.parse(data);
+
+        const supabase = await createClient();
+
+        // Generate a temporary password
+        const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+
+        // Create the user account in Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email: validData.email,
+            password: tempPassword,
+            email_confirm: true, // Skip email confirmation
+        });
+
+        if (authError) {
+            throw authError;
+        }
+
+        if (!authData.user) {
+            throw new Error("Failed to create user account");
+        }
+
+        // Create the user profile in your database
+        const { error: profileError } = await supabase
+            .from("users")
+            .update({
+                first_name: validData.firstName,
+                last_name: validData.lastName,
+                date_of_birth: validData.dateOfBirth || null,
+                gender: validData.gender || null,
+                phone: validData.phone || null,
+                role: "patient",
+                is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", authData.user.id);
+
+        if (profileError) {
+            // If profile creation fails, attempt to delete the auth user to avoid orphaned accounts
+            await supabase.auth.admin.deleteUser(authData.user.id);
+            throw profileError;
+        }
+
+        // If programId is provided, enroll the patient in the program
+        if (data.programId) {
+            // Implementation for program enrollment would go here
+        }
+
+        // Revalidate the patients list
+        revalidatePath("/admin/patients");
+
+        return {
+            success: true,
+            data: { tempPassword }
         };
     } catch (error) {
         return handleServerError(error);

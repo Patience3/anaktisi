@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,8 +26,9 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-// Patient schema
+// Patient edit schema - ensure this matches the one in lib/actions/admin/patient.ts
 const EditPatientSchema = z.object({
     patientId: z.string().uuid("Invalid patient ID"),
     firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -49,9 +50,10 @@ interface Patient {
     last_name: string;
     email: string;
     is_active: boolean;
-    date_of_birth?: string;
-    gender?: string;
-    phone?: string;
+    date_of_birth?: string | null;
+    gender?: string | null;
+    phone?: string | null;
+    role: string;
 }
 
 interface EditPatientFormProps {
@@ -62,8 +64,9 @@ interface EditPatientFormProps {
 export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
 
-    // Initialize form with patient data
+    // Initialize form with patient data, handling null values correctly
     const form = useForm<EditPatientFormValues>({
         resolver: zodResolver(EditPatientSchema),
         defaultValues: {
@@ -86,9 +89,18 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
             const result = await updatePatient(data);
 
             if (result.success) {
+                // Show success message
+                setError(null);
+
+                // Refresh the data by calling onSuccess or refreshing the router
                 if (onSuccess) {
                     onSuccess();
+                } else {
+                    router.refresh();
                 }
+
+                // Optionally redirect back to patient detail page
+                router.push(`/admin/patients/${patient.id}`);
             } else {
                 setError(result.error?.message || "Failed to update patient");
 
@@ -96,16 +108,18 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
                 if (result.error?.details) {
                     // Set field errors from server response
                     Object.entries(result.error.details).forEach(([field, messages]) => {
-                        form.setError(field as never, {
-                            type: "server",
-                            message: messages[0],
-                        });
+                        if (field in form.formState.errors && Array.isArray(messages) && messages.length > 0) {
+                            form.setError(field as keyof EditPatientFormValues, {
+                                type: "server",
+                                message: messages[0],
+                            });
+                        }
                     });
                 }
             }
         } catch (e) {
+            console.error("Error updating patient:", e);
             setError("An unexpected error occurred");
-            console.error(e);
         } finally {
             setIsLoading(false);
         }
@@ -134,7 +148,7 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
                     )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                         control={form.control}
                         name="firstName"
@@ -174,9 +188,16 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
                                 <Input
                                     type="date"
                                     {...field}
-                                    onChange={(e) => field.onChange(e.target.value || undefined)}
+                                    value={field.value || ""}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        field.onChange(value || undefined);
+                                    }}
                                 />
                             </FormControl>
+                            <FormDescription>
+                                Optional: Patient's date of birth
+                            </FormDescription>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -203,6 +224,9 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
                                     <SelectItem value="female">Female</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <FormDescription>
+                                Optional: Patient's gender
+                            </FormDescription>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -218,10 +242,16 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
                                 <Input
                                     type="tel"
                                     placeholder="+1 (555) 123-4567"
-                                    {...field}
-                                    onChange={(e) => field.onChange(e.target.value || undefined)}
+                                    value={field.value || ""}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        field.onChange(value || undefined);
+                                    }}
                                 />
                             </FormControl>
+                            <FormDescription>
+                                Optional: Patient's contact phone number
+                            </FormDescription>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -250,10 +280,13 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
                     )}
                 />
 
+                {/* Hidden field for patientId */}
+                <input type="hidden" {...form.register("patientId")} />
+
                 <div className="flex justify-end pt-4">
                     <Button
                         type="submit"
-                        disabled={isLoading || form.formState.isSubmitting}
+                        disabled={isLoading || !form.formState.isDirty}
                     >
                         {isLoading ? (
                             <>
