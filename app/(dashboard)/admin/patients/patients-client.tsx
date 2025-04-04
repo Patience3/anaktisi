@@ -85,7 +85,6 @@ export function PatientsClient({
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
-
                     <Select
                         value={categoryFilter}
                         onValueChange={setCategoryFilter}
@@ -97,7 +96,7 @@ export function PatientsClient({
                             </div>
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">All Categories</SelectItem>
+                            <SelectItem value="all">All Categories</SelectItem>
                             {availableCategories.map((category) => (
                                 <SelectItem key={category.id} value={category.id}>
                                     {category.name}

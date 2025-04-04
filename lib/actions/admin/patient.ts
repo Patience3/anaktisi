@@ -76,16 +76,12 @@ export async function getAllPatients(
     categoryId?: string
 ): Promise<ActionResponse<Patient[]>> {
     try {
-        console.log("Starting getAllPatients");
-
         // Ensure the user is an admin
         await requireAdmin();
-        console.log("Admin check passed");
 
         const supabase = await createClient();
-        console.log("Supabase client created");
 
-        // Build the query and log it
+        // Start with a simpler query without the complex joins
         let query = supabase
             .from("users")
             .select(`
@@ -98,34 +94,24 @@ export async function getAllPatients(
                 date_of_birth, 
                 gender, 
                 phone, 
-                role,
-                patient_categories(
-                    id, 
-                    category_id, 
-                    program_categories(id, name)
-                )
+                role
             `)
             .eq("role", "patient")
             .order("created_at", { ascending: false });
-        console.log("Query built");
 
         // Apply name search filter if provided
         if (searchTerm) {
             query = query.or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
-            console.log("Search filter applied:", searchTerm);
         }
 
         // Get the results
-        console.log("Executing query...");
         const { data, error } = await query;
-        console.log("Query executed");
 
         if (error) {
             console.error("Database error:", error);
             throw error;
         }
 
-        console.log("Data received:", data ? data.length : 0, "records");
         if (!data) {
             return {
                 success: true,
@@ -133,49 +119,13 @@ export async function getAllPatients(
             };
         }
 
-        // Transform data to include category information
-        console.log("Processing patient data...");
-        const patients: Patient[] = [];
+        // Get categories in a separate query if needed
+        const patients = data.map(patient => ({
+            ...patient,
+            category: null // We'll fetch this separately if needed
+        }));
 
-        for (const patient of data) {
-            console.log("Processing patient:", patient.id);
-            let category = null;
-
-            // Get the active category if any
-            if (patient.patient_categories &&
-                Array.isArray(patient.patient_categories) &&
-                patient.patient_categories.length > 0) {
-
-                const activeCategory = patient.patient_categories[0];
-                console.log("Found active category:", activeCategory.id);
-
-                if (activeCategory && activeCategory.program_categories) {
-                    console.log("Program categories:", activeCategory.program_categories);
-                    category = {
-                        id: activeCategory.category_id,
-                        name: getCategoryName(activeCategory.program_categories)
-                    };
-                    console.log("Category extracted:", category);
-                }
-            }
-
-            // Skip if filtering by category and this patient doesn't match
-            if (categoryId && (!category || category.id !== categoryId)) {
-                console.log("Filtering out patient due to category mismatch");
-                continue;
-            }
-
-            // Create patient object with category
-            const patientWithCategory: Patient = {
-                ...patient,
-                category
-            };
-
-            patients.push(patientWithCategory);
-            console.log("Patient added to result set");
-        }
-
-        console.log("Processing complete, returning", patients.length, "patients");
+        // Return the patients without categories for now
         return {
             success: true,
             data: patients

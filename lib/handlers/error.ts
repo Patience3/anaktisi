@@ -39,15 +39,22 @@ export function handleServerError(error: unknown): {
     };
     status: number;
 } {
-    // Log the error safely
+    // Log the error safely with more details
     try {
-        console.error("Server Error:",
-            error instanceof Error
-                ? error.message
-                : "Unknown error"
-        );
+        // Check various error types
+        if (error instanceof Error) {
+            console.error("Server Error (Error):", {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+        } else if (typeof error === 'object' && error !== null) {
+            console.error("Server Error (Object):", JSON.stringify(error));
+        } else {
+            console.error("Server Error (Unknown type):", error);
+        }
     } catch (loggingError) {
-        console.error("Error during error logging");
+        console.error("Error during error logging:", loggingError);
     }
 
     let status = getErrorStatus(error);

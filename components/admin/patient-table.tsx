@@ -58,9 +58,9 @@ export function PatientTable<TData, TValue>({
             <div className="flex items-center py-4 w-[250px]">
                 <Input
                     placeholder="Filter by name..."
-                    value={(table.getColumn("Name")?.getFilterValue() as string) ?? ""}
+                    value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
                     onChange={(event) =>
-                        table.getColumn("Name")?.setFilterValue(event.target.value)
+                        table.getColumn("name")?.setFilterValue(event.target.value)
                     }
                     className="max-w-sm"
                 />
