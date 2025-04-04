@@ -145,7 +145,8 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
 
         const supabase = await createClient();
 
-        const { data, error } = await supabase
+        // Step 1: Get basic patient info first - no complex joins
+        const { data: userData, error: userError } = await supabase
             .from("users")
             .select(`
                 id, 
@@ -157,47 +158,54 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
                 date_of_birth, 
                 gender, 
                 phone, 
-                role,
-                patient_categories(
-                    id, 
-                    category_id, 
-                    program_categories(id, name)
-                )
+                role
             `)
             .eq("id", id)
             .eq("role", "patient")
             .single();
 
-        if (error) {
-            throw error;
+        if (userError) {
+            throw userError;
         }
 
-        if (!data) {
+        if (!userData) {
             throw new Error("Patient not found");
         }
 
-        let category = null;
-
-        // Get the active category if any
-        if (data.patient_categories &&
-            Array.isArray(data.patient_categories) &&
-            data.patient_categories.length > 0) {
-
-            const activeCategory = data.patient_categories[0];
-
-            if (activeCategory && activeCategory.program_categories) {
-                category = {
-                    id: activeCategory.category_id,
-                    name: getCategoryName(activeCategory.program_categories)
-                };
-            }
-        }
-
-        // Create the patient object with category info
+        // Create patient object with basic data
         const patient: Patient = {
-            ...data,
-            category
+            ...userData,
+            category: null
         };
+
+        // Step 2: Try to get category info separately
+        try {
+            // First get the patient_categories entry
+            const { data: categoryLink, error: linkError } = await supabase
+                .from("patient_categories")
+                .select("category_id")
+                .eq("patient_id", id)
+                .maybeSingle();
+
+            if (!linkError && categoryLink && categoryLink.category_id) {
+                // Then get the category name from program_categories
+                const { data: category, error: catError } = await supabase
+                    .from("program_categories")
+                    .select("id, name")
+                    .eq("id", categoryLink.category_id)
+                    .single();
+
+                if (!catError && category) {
+                    patient.category = {
+                        id: category.id,
+                        name: category.name || "Unknown Category"
+                    };
+                }
+            }
+        } catch (categoryError) {
+            // Log but don't throw - allow patient data to be returned
+            console.error("Error fetching category data:", categoryError);
+        }
 
         return {
             success: true,
@@ -207,7 +215,6 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
         return handleServerError(error);
     }
 }
-
 /**
  * Update patient active status
  */

@@ -16,7 +16,8 @@ interface EditPatientPageProps {
 
 // Generate metadata for the page
 export async function generateMetadata({ params }: EditPatientPageProps): Promise<Metadata> {
-    const patientResponse = await getPatientById(params.patientId);
+    const patientId=params.patientId;
+    const patientResponse = await getPatientById(patientId);
 
     if (!patientResponse.success || !patientResponse.data) {
         return {
@@ -40,7 +41,8 @@ export default async function EditPatientPage({ params }: EditPatientPageProps) 
     }
 
     // Fetch patient data
-    const patientResponse = await getPatientById(params.patientId);
+    const patientId=params.patientId;
+    const patientResponse = await getPatientById(patientId);
 
     if (!patientResponse.success || !patientResponse.data) {
         notFound();

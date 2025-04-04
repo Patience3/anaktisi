@@ -34,11 +34,39 @@ interface PatientCategorySectionProps {
 export function PatientCategorySection({ patient, categories }: PatientCategorySectionProps) {
     const router = useRouter();
 
+    // Add debugging
+    console.log("Patient received in category section:", patient);
+    console.log("Patient category:", patient.category);
+
     const handleSuccess = () => {
+        // Force a refresh to get the latest data
         router.refresh();
     };
 
-    return patient.category ? (
+    // Explicit check for null or undefined category
+    if (!patient.category) {
+        return (
+            <div className="p-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <h3 className="text-lg font-medium text-gray-700 mb-2">No Treatment Category Assigned</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                    Assign this patient to a treatment category to better organize their care.
+                </p>
+                <AssignCategoryModal
+                    patientId={patient.id}
+                    patientName={`${patient.first_name} ${patient.last_name}`}
+                    categories={categories}
+                    onSuccess={handleSuccess}
+                >
+                    <Button>
+                        Assign to Category
+                    </Button>
+                </AssignCategoryModal>
+            </div>
+        );
+    }
+
+    // If we get here, we have a category
+    return (
         <div className="space-y-4">
             <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                 <h3 className="text-lg font-medium text-blue-800 mb-2">
@@ -76,23 +104,6 @@ export function PatientCategorySection({ patient, categories }: PatientCategoryS
                     </AssignCategoryModal>
                 </div>
             </div>
-        </div>
-    ) : (
-        <div className="p-6 text-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-            <h3 className="text-lg font-medium text-gray-700 mb-2">No Treatment Category Assigned</h3>
-            <p className="text-sm text-gray-500 mb-4">
-                Assign this patient to a treatment category to better organize their care.
-            </p>
-            <AssignCategoryModal
-                patientId={patient.id}
-                patientName={`${patient.first_name} ${patient.last_name}`}
-                categories={categories}
-                onSuccess={handleSuccess}
-            >
-                <Button>
-                    Assign to Category
-                </Button>
-            </AssignCategoryModal>
         </div>
     );
 }

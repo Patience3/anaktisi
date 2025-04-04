@@ -22,8 +22,9 @@ interface PatientDetailProps {
 
 // Generate metadata for the page
 export async function generateMetadata({ params }: PatientDetailProps): Promise<Metadata> {
-    const patientResponse = await getPatientById(params.patientId);
-
+    // Make sure params is resolved before using it
+    const patientId = params.patientId;
+    const patientResponse = await getPatientById(patientId);
     if (!patientResponse.success || !patientResponse.data) {
         return {
             title: "Patient - Not Found",
@@ -44,9 +45,10 @@ export default async function PatientDetailPage({ params }: PatientDetailProps) 
         // Redirect to login if not authorized
         redirect("/login");
     }
+    const patientId = params.patientId;
 
     // Fetch patient data
-    const patientResponse = await getPatientById(params.patientId);
+    const patientResponse = await getPatientById(patientId);
 
     if (!patientResponse.success || !patientResponse.data) {
         notFound();

@@ -219,7 +219,7 @@ export function EditPatientForm({ patient, onSuccess }: EditPatientFormProps) {
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    <SelectItem value="">Not specified</SelectItem>
+                                    <SelectItem value="none">Not specified</SelectItem>
                                     <SelectItem value="male">Male</SelectItem>
                                     <SelectItem value="female">Female</SelectItem>
                                 </SelectContent>
