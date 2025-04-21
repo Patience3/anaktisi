@@ -1,125 +1,229 @@
-// app/(dashboard)/patient/programs/page.tsx
+// app/(dashboard)/patient/programs/[programId]/page.tsx
+import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Metadata } from "next";
-import { getPatientCategory } from "@/lib/actions/patient/programs";
-import { PatientProgramsView } from "@/components/patient/programs-view";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { InfoIcon } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { getCategoryPrograms, enrollInProgram } from "@/lib/actions/patient/programs";
+import { ProgramModulesList } from "@/components/patient/program-modules-list";
 
-export const metadata: Metadata = {
-    title: "My Programs | Patient Portal",
-    description: "View and access your assigned treatment programs",
-};
+interface ProgramDetailPageProps {
+    params: {
+        programId: string;
+    };
+}
 
-export default async function PatientProgramsPage() {
-    // Fetch the patient's assigned category
-    const categoryResponse = await getPatientCategory();
+export async function generateMetadata({ params }: ProgramDetailPageProps): Promise<Metadata> {
+    const programId = params.programId;
+
+    try {
+        // We'll use the category programs endpoint to get program details
+        const categoryResponse = await getCategoryPrograms("all"); // The server action handles authentication
+
+        if (!categoryResponse.success) {
+            return {
+                title: "Program Details",
+            };
+        }
+
+        const program = categoryResponse.data?.find(p => p.id === programId);
+
+        if (!program) {
+            return {
+                title: "Program Not Found",
+            };
+        }
+
+        return {
+            title: `${program.title} | Patient Programs`,
+            description: program.description || "View program details and modules",
+        };
+    } catch (error) {
+        console.error("Error generating metadata:", error);
+        return {
+            title: "Program Details",
+        };
+    }
+}
+
+export default async function ProgramDetailPage({ params }: ProgramDetailPageProps) {
+    const programId = params.programId;
+
+    // Fetch program details and check enrollment
+    const categoryResponse = await getCategoryPrograms("all");
 
     if (!categoryResponse.success) {
-        // Show an error message if we couldn't fetch the category
         return (
             <div className="container mx-auto py-6">
-                <Alert variant="destructive" className="mb-6">
-                    <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>
-                        {categoryResponse.error?.message || "Failed to load your treatment category"}
-                    </AlertDescription>
-                </Alert>
+                <div className="flex flex-col gap-4">
+                    <Button variant="ghost" size="sm" asChild className="w-fit">
+                        <Link href="/patient/programs">
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Back to Programs
+                        </Link>
+                    </Button>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Error</CardTitle>
+                            <CardDescription>
+                                {categoryResponse.error?.message || "Failed to load program details"}
+                            </CardDescription>
+                        </CardHeader>
+                    </Card>
+                </div>
             </div>
         );
     }
 
-    // If the patient doesn't have an assigned category yet
-    if (!categoryResponse.data) {
-        return (
-            <div className="container mx-auto py-6">
-                <h1 className="text-3xl font-bold tracking-tight mb-6">My Programs</h1>
+    // Find the program in question
+    const program = categoryResponse.data?.find(p => p.id === programId);
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>No Treatment Category Assigned</CardTitle>
-                        <CardDescription>
-                            You haven't been assigned to a treatment category yet.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col items-center justify-center py-8">
-                        <div className="bg-blue-50 rounded-full p-4 mb-4">
-                            <InfoIcon className="h-10 w-10 text-blue-500" />
-                        </div>
-                        <p className="text-center max-w-md text-muted-foreground mb-4">
-                            Your therapist needs to assign you to a treatment category before you can
-                            access any programs. Please contact your therapist for more information.
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
-        );
+    if (!program) {
+        notFound();
     }
 
-    const category = categoryResponse.data;
+    // Check if user is enrolled
+    const isEnrolled = !!program.enrollment;
+
+    // If not enrolled, enroll them first
+    if (!isEnrolled) {
+        const enrollmentResponse = await enrollInProgram(programId);
+
+        if (!enrollmentResponse.success) {
+            return (
+                <div className="container mx-auto py-6">
+                    <div className="flex flex-col gap-4">
+                        <Button variant="ghost" size="sm" asChild className="w-fit">
+                            <Link href="/patient/programs">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to Programs
+                            </Link>
+                        </Button>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Enrollment Error</CardTitle>
+                                <CardDescription>
+                                    {enrollmentResponse.error?.message || "Failed to enroll in program"}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button asChild>
+                                    <Link href="/patient/programs">Return to Programs</Link>
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            );
+        }
+    }
 
     return (
         <div className="container mx-auto py-6">
-            <div className="flex flex-col gap-2 mb-6">
-                <h1 className="text-3xl font-bold tracking-tight">My Programs</h1>
-                <p className="text-muted-foreground">
-                    View and access your assigned treatment programs
-                </p>
-            </div>
-
-            <div className="mb-8">
-                <Card className="bg-blue-50 border-blue-100">
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-blue-800 text-2xl">{category.category.name}</CardTitle>
-                                <CardDescription className="text-blue-700 mt-2">
-                                    Your assigned treatment category
-                                </CardDescription>
-                            </div>
-                            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
-                                Active
-                            </Badge>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-blue-800">
-                            {category.category.description || "No description available for this category."}
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
-
             <div className="mb-6">
-                <h2 className="text-2xl font-semibold mb-4">Available Programs</h2>
-                <Suspense fallback={<ProgramsSkeleton />}>
-                    <PatientProgramsView categoryId={category.category_id} />
-                </Suspense>
-            </div>
-        </div>
-    );
-}
+                <Button variant="ghost" size="sm" asChild className="mb-4">
+                    <Link href="/patient/programs">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back to Programs
+                    </Link>
+                </Button>
 
-// Skeleton loader for programs
-function ProgramsSkeleton() {
-    return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-                <Card key={i} className="h-[300px] animate-pulse">
-                    <CardHeader>
-                        <div className="h-6 bg-gray-200 rounded-md w-3/4 mb-2"></div>
-                        <div className="h-4 bg-gray-200 rounded-md w-1/2"></div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="h-4 bg-gray-200 rounded-md w-full mb-2"></div>
-                        <div className="h-4 bg-gray-200 rounded-md w-5/6 mb-2"></div>
-                        <div className="h-4 bg-gray-200 rounded-md w-4/5"></div>
-                        <div className="mt-6 h-8 bg-gray-200 rounded-md w-1/2 mx-auto"></div>
-                    </CardContent>
-                </Card>
-            ))}
+                <div className="flex flex-col gap-2">
+                    <h1 className="text-3xl font-bold tracking-tight">{program.title}</h1>
+                    <p className="text-muted-foreground">
+                        {program.is_self_paced ?
+                            "Self-paced program" :
+                            program.duration_days ?
+                                `${program.duration_days}-day program` :
+                                "Flexible duration program"
+                        }
+                    </p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Program Details</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-gray-700 whitespace-pre-line">
+                                {program.description || "No detailed description available for this program."}
+                            </p>
+
+                            {program.enrollment?.start_date && (
+                                <div className="mt-4 p-4 bg-blue-50 rounded-md">
+                                    <p className="text-blue-800 font-medium">
+                                        You started this program on {new Date(program.enrollment.start_date).toLocaleDateString()}
+                                    </p>
+                                    {program.enrollment.expected_end_date && (
+                                        <p className="text-blue-700 text-sm mt-1">
+                                            Expected completion: {new Date(program.enrollment.expected_end_date).toLocaleDateString()}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <div className="mt-6">
+                        <h2 className="text-2xl font-semibold mb-4">Program Modules</h2>
+                        <Suspense fallback={<p>Loading modules...</p>}>
+                            <ProgramModulesList programId={programId} />
+                        </Suspense>
+                    </div>
+                </div>
+
+                <div>
+                    <Card className="sticky top-20">
+                        <CardHeader>
+                            <CardTitle>Your Progress</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-center p-4">
+                                <div className="inline-flex items-center justify-center h-24 w-24 rounded-full bg-blue-100 text-blue-800 text-2xl font-bold mb-2">
+                                    {program.enrollment?.status === 'completed' ? '100%' : '25%'}
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                    {program.enrollment?.status === 'completed'
+                                        ? 'You have completed this program!'
+                                        : 'You\'ve completed 1 of 4 modules'}
+                                </p>
+                            </div>
+
+                            <Separator className="my-4" />
+
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-medium">Quick Stats</h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="p-3 bg-gray-50 rounded-md">
+                                        <p className="text-xs text-gray-500">Modules Completed</p>
+                                        <p className="text-lg font-medium">1/4</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-md">
+                                        <p className="text-xs text-gray-500">Time Spent</p>
+                                        <p className="text-lg font-medium">45 min</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-md">
+                                        <p className="text-xs text-gray-500">Assessments</p>
+                                        <p className="text-lg font-medium">1/2</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-md">
+                                        <p className="text-xs text-gray-500">Days Active</p>
+                                        <p className="text-lg font-medium">3</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
         </div>
     );
 }

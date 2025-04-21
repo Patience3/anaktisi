@@ -6,37 +6,98 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
+import { useRouter } from "next/navigation";
 import {
     FileText, Video, Link as LinkIcon, FileSymlink,
-    ExternalLink, CheckCircle
+    ExternalLink, CheckCircle, Loader2
 } from "lucide-react";
+import Link from "next/link";
+import { ContentItem, updateModuleProgress } from "@/lib/actions/patient/programs";
 
 interface ModuleContentViewProps {
-    contentItems: any[];
+    contentItems: ContentItem[];
     programId: string;
     moduleId: string;
 }
 
 export function ModuleContentView({ contentItems, programId, moduleId }: ModuleContentViewProps) {
     const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
+    const [processingItem, setProcessingItem] = useState<string | null>(null);
+    const [updatingModuleProgress, setUpdatingModuleProgress] = useState(false);
     const { toast } = useToast();
+    const router = useRouter();
 
     const sortedItems = [...contentItems].sort((a, b) => a.sequence_number - b.sequence_number);
 
-    const markItemCompleted = (itemId: string) => {
-        setCompletedItems(prev => ({
-            ...prev,
-            [itemId]: true
-        }));
+    const markItemCompleted = async (itemId: string) => {
+        setProcessingItem(itemId);
 
-        toast({
-            title: "Content Completed",
-            description: "Your progress has been saved",
-        });
+        try {
+            // Mark the item completed in our local state
+            setCompletedItems(prev => ({
+                ...prev,
+                [itemId]: true
+            }));
+
+            // Check if all items are completed
+            const newCompletedItems = { ...completedItems, [itemId]: true };
+            const allItemsCompleted = sortedItems.every(item => newCompletedItems[item.id]);
+
+            // If all items are completed, update the module status
+            if (allItemsCompleted && !updatingModuleProgress) {
+                setUpdatingModuleProgress(true);
+
+                try {
+                    const result = await updateModuleProgress(moduleId, 'completed');
+
+                    if (result.success) {
+                        toast({
+                            title: "Module Completed",
+                            description: "Congratulations! You've completed this module.",
+                        });
+
+                        // Wait a moment then redirect back to program page
+                        setTimeout(() => {
+                            router.push(`/patient/programs/${programId}`);
+                            router.refresh();
+                        }, 1500);
+                    } else {
+                        toast({
+                            title: "Error",
+                            description: result.error?.message || "Failed to update module progress",
+                            variant: "destructive",
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error updating module progress:", error);
+                    toast({
+                        title: "Error",
+                        description: "An unexpected error occurred while updating module progress",
+                        variant: "destructive",
+                    });
+                } finally {
+                    setUpdatingModuleProgress(false);
+                }
+            } else {
+                toast({
+                    title: "Content Completed",
+                    description: "Your progress has been saved",
+                });
+            }
+        } catch (error) {
+            console.error("Error marking item completed:", error);
+            toast({
+                title: "Error",
+                description: "An unexpected error occurred",
+                variant: "destructive",
+            });
+        } finally {
+            setProcessingItem(null);
+        }
     };
 
     // Function to parse content based on type
-    const parseContent = (item: any) => {
+    const parseContent = (item: ContentItem) => {
         if (item.content_type === 'text') {
             return { content: item.content };
         }
@@ -52,6 +113,7 @@ export function ModuleContentView({ contentItems, programId, moduleId }: ModuleC
         <div className="space-y-8">
             {sortedItems.map((item, index) => {
                 const isCompleted = !!completedItems[item.id];
+                const isProcessing = processingItem === item.id;
                 const parsedContent = parseContent(item);
 
                 return (
@@ -82,8 +144,18 @@ export function ModuleContentView({ contentItems, programId, moduleId }: ModuleC
 
                                 {!isCompleted && (
                                     <div className="mt-4 flex justify-end">
-                                        <Button onClick={() => markItemCompleted(item.id)}>
-                                            Mark as Completed
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Complete...
+                                                </>
+                                            ) : (
+                                                "Mark as Completed"
+                                            )}
                                         </Button>
                                     </div>
                                 )}
@@ -112,8 +184,18 @@ export function ModuleContentView({ contentItems, programId, moduleId }: ModuleC
 
                                 {!isCompleted && (
                                     <div className="mt-4 flex justify-end">
-                                        <Button onClick={() => markItemCompleted(item.id)}>
-                                            Mark as Watched
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Watched...
+                                                </>
+                                            ) : (
+                                                "Mark as Watched"
+                                            )}
                                         </Button>
                                     </div>
                                 )}
@@ -142,8 +224,18 @@ export function ModuleContentView({ contentItems, programId, moduleId }: ModuleC
 
                                 {!isCompleted && (
                                     <div className="mt-4 flex justify-end">
-                                        <Button onClick={() => markItemCompleted(item.id)}>
-                                            Mark as Read
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Read...
+                                                </>
+                                            ) : (
+                                                "Mark as Read"
+                                            )}
                                         </Button>
                                     </div>
                                 )}
@@ -172,8 +264,62 @@ export function ModuleContentView({ contentItems, programId, moduleId }: ModuleC
 
                                 {!isCompleted && (
                                     <div className="mt-4 flex justify-end">
-                                        <Button onClick={() => markItemCompleted(item.id)}>
-                                            Mark as Visited
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Visited...
+                                                </>
+                                            ) : (
+                                                "Mark as Visited"
+                                            )}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {item.content_type === 'assessment' && (
+                            <div>
+                                <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+                                    <div className="flex items-start gap-4">
+                                        <FileText className="h-10 w-10 text-amber-500 flex-shrink-0" />
+                                        <div>
+                                            <p className="text-gray-700 mb-4">{parsedContent.description || "No description provided"}</p>
+                                            <div className="bg-amber-50 border border-amber-100 rounded-md p-4">
+                                                <p className="text-amber-700 mb-2">Assessment:</p>
+                                                <p className="text-sm text-amber-800 mb-4">
+                                                    This assessment will help evaluate your understanding and progress.
+                                                    {parsedContent.timeLimitMinutes &&
+                                                        ` You will have ${parsedContent.timeLimitMinutes} minutes to complete it.`}
+                                                </p>
+                                                <Button variant="outline" className="gap-2">
+                                                    <Link href={`/patient/assessments/${item.id}`}>
+                                                        Take Assessment
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {!isCompleted && (
+                                    <div className="mt-4 flex justify-end">
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Completed...
+                                                </>
+                                            ) : (
+                                                "Mark as Completed"
+                                            )}
                                         </Button>
                                     </div>
                                 )}
@@ -190,11 +336,60 @@ export function ModuleContentView({ contentItems, programId, moduleId }: ModuleC
                             {Object.keys(completedItems).length} of {sortedItems.length} items completed
                         </p>
 
-                        <Button asChild>
-                            <a href={`/patient/programs/${programId}`}>
-                                Return to Program
-                            </a>
-                        </Button>
+                        <div className="flex gap-2">
+                            {updatingModuleProgress ? (
+                                <Button disabled>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Completing Module...
+                                </Button>
+                            ) : (
+                                <>
+                                    <Button variant="outline" asChild>
+                                        <Link href={`/patient/programs/${programId}`}>
+                                            Return to Program
+                                        </Link>
+                                    </Button>
+
+                                    {Object.keys(completedItems).length === sortedItems.length && (
+                                        <Button
+                                            onClick={async () => {
+                                                setUpdatingModuleProgress(true);
+                                                try {
+                                                    const result = await updateModuleProgress(moduleId, 'completed');
+
+                                                    if (result.success) {
+                                                        toast({
+                                                            title: "Module Completed",
+                                                            description: "Congratulations! You've completed this module.",
+                                                        });
+
+                                                        router.push(`/patient/programs/${programId}`);
+                                                        router.refresh();
+                                                    } else {
+                                                        toast({
+                                                            title: "Error",
+                                                            description: result.error?.message || "Failed to update module progress",
+                                                            variant: "destructive",
+                                                        });
+                                                    }
+                                                } catch (error) {
+                                                    console.error("Error updating module progress:", error);
+                                                    toast({
+                                                        title: "Error",
+                                                        description: "An unexpected error occurred while updating module progress",
+                                                        variant: "destructive",
+                                                    });
+                                                } finally {
+                                                    setUpdatingModuleProgress(false);
+                                                }
+                                            }}
+                                        >
+                                            Complete Module
+                                        </Button>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
