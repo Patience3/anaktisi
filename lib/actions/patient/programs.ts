@@ -444,7 +444,7 @@ export async function enrollInProgram(programId: string): Promise<ActionResponse
 /**
  * Get content items for a specific module
  */
-export async function getModuleContent(moduleId: string): Promise<ActionResponse<any[]>> {
+export async function getModuleContent(moduleId: string): Promise<ActionResponse<[any]>> {
     try {
         // Get the authenticated user
         const authUser = await getAuthUserSafe();
