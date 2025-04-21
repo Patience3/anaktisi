@@ -1,6 +1,8 @@
 // app/(dashboard)/admin/patients/page.tsx
+// Simplified to only handle name search
+
 import { Suspense } from "react";
-import { getAllPatients, getCategoriesForFilter } from "@/lib/actions/admin/patient";
+import { getAllPatients } from "@/lib/actions/admin/patient";
 import { requireAdmin } from "@/lib/auth-utils";
 import { Separator } from "@/components/ui/separator";
 import { TableSkeleton } from "@/components/shared/table-skeleton";
@@ -16,7 +18,6 @@ export const metadata: Metadata = {
 interface PatientsPageProps {
     searchParams: {
         search?: string;
-        category?: string;
     };
 }
 
@@ -25,16 +26,8 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
         // Check authorization
         await requireAdmin();
 
-        // Get search term and category filter from URL params
-        const searchTerm = searchParams.search || undefined;
-        const categoryId = searchParams.category || undefined;
-
-        // Fetch available categories for the filter dropdown
-        const categoriesResponse = await getCategoriesForFilter();
-
-        if (!categoriesResponse.success) {
-            throw new Error(categoriesResponse.error?.message || "Failed to load categories");
-        }
+        // Get search term from URL params
+        const searchTerm = searchParams?.search || undefined;
 
         return (
             <div className="container mx-auto py-6">
@@ -42,7 +35,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight">Patients</h1>
                         <p className="text-muted-foreground">
-                            Manage patient accounts and treatment categories
+                            Manage patient accounts and treatment programs
                         </p>
                     </div>
                 </div>
@@ -52,8 +45,6 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
                 <Suspense fallback={<TableSkeleton columns={5} rows={10} />}>
                     <PatientsTableContainer
                         searchTerm={searchTerm}
-                        categoryId={categoryId}
-                        availableCategories={categoriesResponse.data || []}
                     />
                 </Suspense>
             </div>
@@ -66,16 +57,12 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
 
 // This is a separate async component to handle the data fetching
 async function PatientsTableContainer({
-                                          searchTerm,
-                                          categoryId,
-                                          availableCategories
+                                          searchTerm
                                       }: {
-    searchTerm?: string,
-    categoryId?: string,
-    availableCategories: Array<{id: string, name: string}>
+    searchTerm?: string
 }) {
     // Fetch patients with filters applied
-    const response = await getAllPatients();
+    const response = await getAllPatients(searchTerm);
 
     if (!response.success) {
         return (
@@ -92,9 +79,7 @@ async function PatientsTableContainer({
     return (
         <PatientsClient
             patients={patients}
-            availableCategories={availableCategories}
             initialSearch={searchTerm}
-            initialCategoryFilter={categoryId}
         />
     );
 }

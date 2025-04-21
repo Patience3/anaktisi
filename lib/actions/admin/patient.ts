@@ -145,7 +145,7 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
 
         const supabase = await createClient();
 
-        // Step 1: Get basic patient info first - no complex joins
+        // Get the basic patient data first
         const { data: userData, error: userError } = await supabase
             .from("users")
             .select(`
@@ -172,40 +172,43 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
             throw new Error("Patient not found");
         }
 
-        // Create patient object with basic data
+        // Create initial patient object without category
         const patient: Patient = {
             ...userData,
             category: null
         };
 
-        // Step 2: Try to get category info separately
+        // Now separately fetch the category information
         try {
-            // First get the patient_categories entry
-            const { data: categoryLink, error: linkError } = await supabase
+            // Query for patient_category first
+            const { data: categoryData, error: categoryError } = await supabase
                 .from("patient_categories")
                 .select("category_id")
                 .eq("patient_id", id)
-                .maybeSingle();
+                .maybeSingle();  // Use maybeSingle to avoid errors if no category
 
-            if (!linkError && categoryLink && categoryLink.category_id) {
-                // Then get the category name from program_categories
-                const { data: category, error: catError } = await supabase
+            if (!categoryError && categoryData && categoryData.category_id) {
+                // If we found a category ID, get the category details
+                const { data: categoryInfo, error: categoryInfoError } = await supabase
                     .from("program_categories")
                     .select("id, name")
-                    .eq("id", categoryLink.category_id)
+                    .eq("id", categoryData.category_id)
                     .single();
 
-                if (!catError && category) {
+                if (!categoryInfoError && categoryInfo) {
+                    // Now add the category to the patient object
                     patient.category = {
-                        id: category.id,
-                        name: category.name || "Unknown Category"
+                        id: categoryInfo.id,
+                        name: categoryInfo.name
                     };
                 }
             }
-        } catch (categoryError) {
-            // Log but don't throw - allow patient data to be returned
-            console.error("Error fetching category data:", categoryError);
+        } catch (e) {
+            // Log but don't fail
+            console.error("Error fetching category data:", e);
         }
+        console.log("DEBUG: Patient data before return:", patient);
+        console.log("DEBUG: Patient category:", patient.category);
 
         return {
             success: true,
@@ -281,7 +284,7 @@ export async function updatePatient(
                 email: validData.email,
                 is_active: validData.isActive,
                 date_of_birth: validData.dateOfBirth || null,
-                gender: validData.gender || null,
+                gender: validData.gender ==="none" || null,
                 phone: validData.phone || null,
                 updated_at: new Date().toISOString()
             })
@@ -353,6 +356,7 @@ export async function assignPatientToCategory(
         // Revalidate the patients page to refresh the data
         revalidatePath("/admin/patients");
         revalidatePath(`/admin/patients/${patientId}`);
+        revalidatePath("/");
 
         return {
             success: true,

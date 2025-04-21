@@ -262,7 +262,7 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
                                         </SelectItem>
                                     ) : programs.length > 0 ? (
                                         <>
-                                            <SelectItem value="">No program</SelectItem>
+                                            <SelectItem value="none">No program</SelectItem>
                                             {programs.map(program => (
                                                 <SelectItem key={program.id} value={program.id}>
                                                     {program.title}
