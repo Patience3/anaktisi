@@ -7,7 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getCategoryPrograms, enrollInProgram } from "@/lib/actions/patient/program";
+import { getCategoryPrograms, enrollInProgram } from "@/lib/actions/patient/programs";
 import { ProgramModulesList } from "@/components/patient/program-modules-list";
 
 interface ProgramDetailPageProps {
@@ -20,9 +20,8 @@ export async function generateMetadata({ params }: ProgramDetailPageProps): Prom
     const programId = params.programId;
 
     try {
-        // We'll use the category programs endpoint to get program details
-        // Not the most efficient approach but works for now
-        const categoryResponse = await getCategoryPrograms("all"); // The server action handles authentication
+        // Fetch program details
+        const categoryResponse = await getCategoryPrograms("all");
 
         if (!categoryResponse.success) {
             return {
@@ -39,7 +38,7 @@ export async function generateMetadata({ params }: ProgramDetailPageProps): Prom
         }
 
         return {
-            title: `${program.title} | Patient Programs`,
+            title: `${program.title} | Program Details`,
             description: program.description || "View program details and modules",
         };
     } catch (error) {
@@ -192,7 +191,7 @@ export default async function ProgramDetailPage({ params }: ProgramDetailPagePro
                                     25%
                                 </div>
                                 <p className="text-sm text-gray-600">
-                                    You&apos;ve completed 1 of 4 modules
+                                    You've completed 1 of 4 modules
                                 </p>
                             </div>
 

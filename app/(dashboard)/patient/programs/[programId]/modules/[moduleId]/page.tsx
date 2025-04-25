@@ -190,7 +190,7 @@ export default async function ModuleDetailPage({ params }: ModuleDetailPageProps
 
                                 <Button className="w-full" asChild>
                                     <Link href={`/patient/programs/${programId}`}>
-                                        Complete Module
+                                        Return to Program
                                     </Link>
                                 </Button>
                             </div>

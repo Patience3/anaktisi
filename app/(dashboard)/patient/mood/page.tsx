@@ -1,6 +1,7 @@
 // app/(dashboard)/patient/mood/page.tsx
 import { Metadata } from "next";
 import { MoodTracker } from "@/components/patient/mood-tracker";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {
     title: "Mood Tracking | Patient Portal",
@@ -17,7 +18,30 @@ export default function MoodTrackingPage() {
                 </p>
             </div>
 
-            <MoodTracker />
+            <div className="grid grid-cols-1 gap-6">
+                <Card className="mb-6">
+                    <CardHeader>
+                        <CardTitle>Why Track Your Mood?</CardTitle>
+                        <CardDescription>
+                            Understanding your emotional patterns helps with recovery
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-gray-700">
+                            Regular mood tracking helps you become more aware of your emotional patterns and triggers.
+                            This awareness is a key part of your treatment journey, allowing you to:
+                        </p>
+                        <ul className="list-disc pl-5 mt-2 space-y-1 text-gray-700">
+                            <li>Identify patterns in how your emotions change over time</li>
+                            <li>Recognize potential triggers for negative emotions</li>
+                            <li>Track your progress throughout your treatment program</li>
+                            <li>Provide valuable information for your healthcare provider</li>
+                        </ul>
+                    </CardContent>
+                </Card>
+
+                <MoodTracker />
+            </div>
         </div>
     );
 }

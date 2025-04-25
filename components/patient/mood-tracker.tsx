@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { submitMoodEntry, getMoodEntries } from "@/lib/actions/patient/programs";
+import { submitMoodEntry, getMoodEntries } from "@/lib/actions/patient/mood";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,7 +11,27 @@ import { useToast } from "@/components/ui/use-toast";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
+import { Loader2, Quote } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+// Motivational quotes for recovery
+const recoveryQuotes = [
+    "Recovery is not a race. You don't have to feel guilty if it takes you longer than you thought it would.",
+    "Recovery is about progression, not perfection.",
+    "The best time to plant a tree was 20 years ago. The second best time is now.",
+    "You don't have to see the whole staircase, just take the first step.",
+    "Rock bottom became the solid foundation on which I rebuilt my life.",
+    "Every moment is a fresh beginning.",
+    "Recovery is hard. Regret is harder.",
+    "Your addiction is not your identity; it's a chapter in your story that doesn't define your future.",
+    "Healing is a process, not an event. Give yourself the time you need.",
+    "The first step towards getting somewhere is to decide that you are not going to stay where you are.",
+    "Believe you can and you're halfway there.",
+    "Sometimes the smallest step in the right direction ends up being the biggest step of your life.",
+    "There are far better things ahead than any we leave behind.",
+    "The hardest thing about addiction is that it doesn't kill you immediately. It kills you slowly, stealing pieces of your life along the way.",
+    "You're not weak for having an addiction. It takes strength to face it and fight it every day."
+];
 
 // Mock questions for mood tracking
 const moodQuestions = [
@@ -45,6 +66,7 @@ export function MoodTracker() {
     const [currentQuestion, setCurrentQuestion] = useState("");
     const [moodEntries, setMoodEntries] = useState<any[]>([]);
     const [isLoadingEntries, setIsLoadingEntries] = useState(true);
+    const [currentQuote, setCurrentQuote] = useState("");
     const { toast } = useToast();
     const router = useRouter();
 
@@ -52,10 +74,12 @@ export function MoodTracker() {
     useEffect(() => {
         // Set initial random question
         setRandomQuestion();
+        setRandomQuote();
 
         // Set up interval to change question every 5 minutes (300000ms)
         const intervalId = setInterval(() => {
             setRandomQuestion();
+            setRandomQuote();
             // Also show a toast notification
             toast({
                 title: "Time for a mood check!",
@@ -73,6 +97,11 @@ export function MoodTracker() {
     const setRandomQuestion = () => {
         const randomIndex = Math.floor(Math.random() * moodQuestions.length);
         setCurrentQuestion(moodQuestions[randomIndex]);
+    };
+
+    const setRandomQuote = () => {
+        const randomIndex = Math.floor(Math.random() * recoveryQuotes.length);
+        setCurrentQuote(recoveryQuotes[randomIndex]);
     };
 
     const loadMoodEntries = async () => {
@@ -127,6 +156,7 @@ export function MoodTracker() {
                 setMoodScore(5);
                 setJournalEntry("");
                 setRandomQuestion();
+                setRandomQuote();
 
                 // Reload entries
                 loadMoodEntries();
@@ -172,6 +202,15 @@ export function MoodTracker() {
             </TabsList>
 
             <TabsContent value="track" className="mt-6">
+                {/* Daily Quote Card */}
+                <Alert className="mb-6 bg-blue-50 border-blue-200">
+                    <Quote className="h-4 w-4 text-blue-600" />
+                    <AlertTitle className="text-blue-700">Daily Recovery Inspiration</AlertTitle>
+                    <AlertDescription className="text-blue-600 italic">
+                        &quot{currentQuote}&quot
+                    </AlertDescription>
+                </Alert>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>How Are You Feeling?</CardTitle>
@@ -230,7 +269,7 @@ export function MoodTracker() {
                                 </div>
 
                                 <div>
-                                    <h3 className="mb-2 text-sm font-medium">Tell us more about how you're feeling (optional):</h3>
+                                    <h3 className="mb-2 text-sm font-medium">Tell us more about how you&lsquore feeling (optional):</h3>
                                     <Textarea
                                         placeholder="Write about your thoughts, feelings, or what might be affecting your mood..."
                                         value={journalEntry}
@@ -277,7 +316,7 @@ export function MoodTracker() {
                         ) : moodEntries.length === 0 ? (
                             <div className="text-center py-10">
                                 <p className="text-muted-foreground">
-                                    You haven't recorded any mood entries yet.
+                                    You haven &lsquo t recorded any mood entries yet.
                                 </p>
                             </div>
                         ) : (
