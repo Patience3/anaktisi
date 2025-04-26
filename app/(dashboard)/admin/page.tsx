@@ -1,11 +1,3 @@
-//import React from 'react'
-
-//const AdminHome = () => {
-//    return (
-//        <div>Admin Home</div>
-//    )
-//}
-//export default AdminHome
 // app/(dashboard)/admin/page.tsx
 import { Suspense } from "react";
 import { Metadata } from "next";
@@ -17,20 +9,11 @@ import {
     CardHeader,
     CardTitle
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import {
-    UsersRound,
-    Activity,
-    BarChart3,
-    Clock,
-    Layers,
-    BookOpen
-} from "lucide-react";
+import { BarChart3, Clock } from "lucide-react";
 import { AdminDashboardStats } from "@/components/admin/dashboard-stats";
-import { RecentPatientsTable } from "@/components/admin/recent-patients-table";
-import { AdminCategoryStats } from "@/components/admin/category-stats";
+//import { RecentPatientsTable } from "@/components/admin/recent-patients-table";
 import { EnrollmentChart } from "@/components/admin/enrollment-chart";
+import { AdminCategoryStats } from "@/components/admin/category-stats";
 
 export const metadata: Metadata = {
     title: "Admin Dashboard | Anaktisi",
@@ -119,7 +102,7 @@ export default async function AdminDashboardPage() {
                                 </div>
                             ))}
                         </div>}>
-                            <RecentPatientsTable />
+
                         </Suspense>
                     </CardContent>
                 </Card>

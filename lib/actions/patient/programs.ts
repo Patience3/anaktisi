@@ -216,19 +216,19 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
             effectiveCategoryId = patientCategory.category_id;
         }
 
-        // First get patient's enrollments
+        // Get patient's enrollments
         const { data: enrollments, error: enrollmentError } = await supabase
             .from("patient_enrollments")
             .select(`
-                id,
-                patient_id,
-                program_id,
-                start_date,
-                expected_end_date,
-                completed_date,
-                status,
-                created_at
-            `)
+        id,
+        patient_id,
+        program_id,
+        start_date,
+        expected_end_date,
+        completed_date,
+        status,
+        created_at
+      `)
             .eq("patient_id", authUser.id)
             .not("status", "eq", "dropped");
 
@@ -236,7 +236,9 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
             throw enrollmentError;
         }
 
+        // If no enrollments, return empty array
         if (!enrollments || enrollments.length === 0) {
+            console.log("No enrollments found for patient");
             return {
                 success: true,
                 data: []
@@ -250,15 +252,15 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
         const { data: programs, error } = await supabase
             .from("treatment_programs")
             .select(`
-                id, 
-                title,
-                description,
-                duration_days,
-                is_self_paced,
-                is_active,
-                created_at,
-                category_id
-            `)
+        id, 
+        title,
+        description,
+        duration_days,
+        is_self_paced,
+        is_active,
+        created_at,
+        category_id
+      `)
             .eq("category_id", effectiveCategoryId)
             .in("id", programIds)
             .order("title");
@@ -267,14 +269,16 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
             throw error;
         }
 
+        // If no programs, return empty array
         if (!programs || programs.length === 0) {
+            console.log("No programs found for category and enrollments");
             return {
                 success: true,
                 data: []
             };
         }
 
-        // Map enrollments to programs with type safety
+        // Map enrollments to programs
         const programsWithEnrollment: Program[] = programs.map(program => {
             const enrollment = enrollments.find(e => e.program_id === program.id) || null;
             return {
@@ -283,6 +287,7 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
             };
         });
 
+        console.log("Returning programs with enrollments:", programsWithEnrollment);
         return {
             success: true,
             data: programsWithEnrollment

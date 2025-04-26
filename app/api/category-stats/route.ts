@@ -1,4 +1,4 @@
-// app/api/admin/category-stats/route.ts
+// app/api/category-stats/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getCategoryStats } from "@/lib/actions/admin/dashboard";
 import { createClient } from "@/utils/supabase/server";
@@ -6,11 +6,12 @@ import { cookies } from "next/headers";
 
 export async function GET(request: NextRequest) {
     try {
-        // Auth check
+        // Auth check - fixed to use correct server client pattern
         const cookieStore = cookies();
-        const supabase = createClient();
+        const supabase = await createClient(); // Use 'await' here
 
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
 
         if (!user) {
             return NextResponse.json(
@@ -34,9 +35,9 @@ export async function GET(request: NextRequest) {
         }
 
         // Get category statistics
-        const data = await getCategoryStats();
+        const categoryStats = await getCategoryStats();
 
-        return NextResponse.json({ success: true, data });
+        return NextResponse.json({ success: true, data: categoryStats.data });
     } catch (error) {
         console.error("API Error:", error);
         return NextResponse.json(

@@ -13,10 +13,28 @@ import {
     ExternalLink, CheckCircle, Loader2
 } from "lucide-react";
 import Link from "next/link";
+import { ContentItem } from "@/lib/actions/patient/programs";
 
-export function ModuleContentView({ contentItems, programId, moduleId }) {
-    const [completedItems, setCompletedItems] = useState({});
-    const [processingItem, setProcessingItem] = useState(null);
+interface ModuleContentViewProps {
+    contentItems: ContentItem[];
+    programId: string;
+    moduleId: string;
+}
+
+interface ParsedContent {
+    videoUrl?: string;
+    documentUrl?: string;
+    linkUrl?: string;
+    fileType?: string;
+    description?: string;
+    assessmentId?: string;
+    timeLimitMinutes?: number;
+    content?: string;
+}
+
+export function ModuleContentView({ contentItems, programId, moduleId }: ModuleContentViewProps) {
+    const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
+    const [processingItem, setProcessingItem] = useState<string | null>(null);
     const [updatingModule, setUpdatingModule] = useState(false);
     const { toast } = useToast();
     const router = useRouter();
@@ -26,7 +44,7 @@ export function ModuleContentView({ contentItems, programId, moduleId }) {
     );
 
     // Mark an item as completed
-    const markItemCompleted = async (itemId) => {
+    const markItemCompleted = async (itemId: string) => {
         setProcessingItem(itemId);
 
         try {
@@ -89,7 +107,7 @@ export function ModuleContentView({ contentItems, programId, moduleId }) {
     };
 
     // Parse content based on type
-    const parseContent = (item) => {
+    const parseContent = (item: ContentItem): ParsedContent => {
         if (item.content_type === 'text') {
             return { content: item.content };
         }
@@ -210,203 +228,200 @@ export function ModuleContentView({ contentItems, programId, moduleId }) {
                                                 {parsedContent.description || "No description provided"}
                                             </p>
                                             <div className="bg-green-50 border border-green-100 rounded-md p-4">
-                                                // components/patient/module-content-view.tsx (continued)
-                                                {/* Document content (continued) */}
-                                                <div className="bg-green-50 border border-green-100 rounded-md p-4">
-                                                    <p className="text-green-700 mb-2">
-                                                        Document Type: {parsedContent.fileType || "Unknown type"}
-                                                    </p>
-                                                    <Button variant="outline" className="gap-2" asChild>
-                                                        <a
-                                                            href={parsedContent.documentUrl || "#"}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                        >
-                                                            <ExternalLink className="h-4 w-4" />
-                                                            Open Document
-                                                        </a>
-                                                    </Button>
-                                                </div>
+                                                <p className="text-green-700 mb-2">
+                                                    Document Type: {parsedContent.fileType || "Unknown type"}
+                                                </p>
+                                                <Button variant="outline" className="gap-2" asChild>
+                                                    <a
+                                                        href={parsedContent.documentUrl || "#"}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                                        Open Document
+                                                    </a>
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
-
-                                    {!isCompleted && (
-                                        <div className="mt-4 flex justify-end">
-                                            <Button
-                                                onClick={() => markItemCompleted(item.id)}
-                                                disabled={isProcessing}
-                                            >
-                                                {isProcessing ? (
-                                                    <>
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                        Marking as Read...
-                                                    </>
-                                                ) : "Mark as Read"}
-                                            </Button>
-                                        </div>
-                                    )}
                                 </div>
-                                )}
 
-                                {/* Link content */}
-                                {item.content_type === 'link' && (
-                                    <div>
-                                        <div className="bg-gray-50 rounded-lg p-6 border">
-                                            <div className="flex items-start gap-4">
-                                                <LinkIcon className="h-10 w-10 text-purple-500 flex-shrink-0" />
-                                                <div>
-                                                    <p className="text-gray-700 mb-4">
-                                                        {parsedContent.description || "No description provided"}
-                                                    </p>
-                                                    <div className="bg-purple-50 border border-purple-100 rounded-md p-4">
-                                                        <p className="text-purple-700 mb-2">External Resource Link:</p>
-                                                        <Button variant="outline" className="gap-2" asChild>
-                                                            <a
-                                                                href={parsedContent.linkUrl || "#"}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                            >
-                                                                <ExternalLink className="h-4 w-4" />
-                                                                Visit Link
-                                                            </a>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {!isCompleted && (
-                                            <div className="mt-4 flex justify-end">
-                                                <Button
-                                                    onClick={() => markItemCompleted(item.id)}
-                                                    disabled={isProcessing}
-                                                >
-                                                    {isProcessing ? (
-                                                        <>
-                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                            Marking as Visited...
-                                                        </>
-                                                    ) : "Mark as Visited"}
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Assessment content */}
-                                {item.content_type === 'assessment' && (
-                                    <div>
-                                        <div className="bg-gray-50 rounded-lg p-6 border">
-                                            <div className="flex items-start gap-4">
-                                                <FileText className="h-10 w-10 text-amber-500 flex-shrink-0" />
-                                                <div>
-                                                    <p className="text-gray-700 mb-4">
-                                                        {parsedContent.description || "No description provided"}
-                                                    </p>
-                                                    <div className="bg-amber-50 border border-amber-100 rounded-md p-4">
-                                                        <p className="text-amber-700 mb-2">Assessment:</p>
-                                                        <p className="text-sm text-amber-800 mb-4">
-                                                            This assessment will help evaluate your understanding and progress.
-                                                            {parsedContent.timeLimitMinutes &&
-                                                                ` You will have ${parsedContent.timeLimitMinutes} minutes to complete it.`}
-                                                        </p>
-                                                        <Button variant="outline" className="gap-2">
-                                                            <Link href={`/patient/assessments/${parsedContent.assessmentId || item.id}`}>
-                                                                Take Assessment
-                                                            </Link>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {!isCompleted && (
-                                            <div className="mt-4 flex justify-end">
-                                                <Button
-                                                    onClick={() => markItemCompleted(item.id)}
-                                                    disabled={isProcessing}
-                                                >
-                                                    {isProcessing ? (
-                                                        <>
-                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                            Marking as Completed...
-                                                        </>
-                                                    ) : "Mark as Completed"}
-                                                </Button>
-                                            </div>
-                                        )}
+                                {!isCompleted && (
+                                    <div className="mt-4 flex justify-end">
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Read...
+                                                </>
+                                            ) : "Mark as Read"}
+                                        </Button>
                                     </div>
                                 )}
                             </div>
-                        );
-                        })}
+                        )}
 
-                        {/* Module completion section */}
-                        {sortedItems.length > 0 && (
-                            <div className="mt-8 pt-4 border-t">
-                                <div className="flex justify-between items-center">
-                                    <p className="text-gray-500">
-                                        {Object.keys(completedItems).length} of {sortedItems.length} items completed
-                                    </p>
-
-                                    <div className="flex gap-2">
-                                        {updatingModule ? (
-                                            <Button disabled>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Completing Module...
-                                            </Button>
-                                        ) : (
-                                            <>
-                                                <Button variant="outline" asChild>
-                                                    <Link href={`/patient/programs/${programId}`}>
-                                                        Return to Program
-                                                    </Link>
-                                                </Button>
-
-                                                {Object.keys(completedItems).length === sortedItems.length && (
-                                                    <Button
-                                                        onClick={async () => {
-                                                            setUpdatingModule(true);
-                                                            try {
-                                                                const result = await updateModuleProgress(moduleId, 'completed');
-
-                                                                if (result.success) {
-                                                                    toast({
-                                                                        title: "Module Completed",
-                                                                        description: "Congratulations! You've completed this module."
-                                                                    });
-
-                                                                    router.push(`/patient/programs/${programId}`);
-                                                                    router.refresh();
-                                                                } else {
-                                                                    toast({
-                                                                        title: "Error",
-                                                                        description: result.error?.message || "Failed to update module progress",
-                                                                        variant: "destructive"
-                                                                    });
-                                                                }
-                                                            } catch (error) {
-                                                                console.error("Error updating module progress:", error);
-                                                                toast({
-                                                                    title: "Error",
-                                                                    description: "An unexpected error occurred",
-                                                                    variant: "destructive"
-                                                                });
-                                                            } finally {
-                                                                setUpdatingModule(false);
-                                                            }
-                                                        }}
+                        {/* Link content */}
+                        {item.content_type === 'link' && (
+                            <div>
+                                <div className="bg-gray-50 rounded-lg p-6 border">
+                                    <div className="flex items-start gap-4">
+                                        <LinkIcon className="h-10 w-10 text-purple-500 flex-shrink-0" />
+                                        <div>
+                                            <p className="text-gray-700 mb-4">
+                                                {parsedContent.description || "No description provided"}
+                                            </p>
+                                            <div className="bg-purple-50 border border-purple-100 rounded-md p-4">
+                                                <p className="text-purple-700 mb-2">External Resource Link:</p>
+                                                <Button variant="outline" className="gap-2" asChild>
+                                                    <a
+                                                        href={parsedContent.linkUrl || "#"}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
                                                     >
-                                                        Complete Module
-                                                    </Button>
-                                                )}
-                                            </>
-                                        )}
+                                                        <ExternalLink className="mr-2 h-4 w-4" />
+                                                        Visit Link
+                                                    </a>
+                                                </Button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
+
+                                {!isCompleted && (
+                                    <div className="mt-4 flex justify-end">
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Visited...
+                                                </>
+                                            ) : "Mark as Visited"}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Assessment content */}
+                        {item.content_type === 'assessment' && (
+                            <div>
+                                <div className="bg-gray-50 rounded-lg p-6 border">
+                                    <div className="flex items-start gap-4">
+                                        <FileText className="h-10 w-10 text-amber-500 flex-shrink-0" />
+                                        <div>
+                                            <p className="text-gray-700 mb-4">
+                                                {parsedContent.description || "No description provided"}
+                                            </p>
+                                            <div className="bg-amber-50 border border-amber-100 rounded-md p-4">
+                                                <p className="text-amber-700 mb-2">Assessment:</p>
+                                                <p className="text-sm text-amber-800 mb-4">
+                                                    This assessment will help evaluate your understanding and progress.
+                                                    {parsedContent.timeLimitMinutes &&
+                                                        ` You will have ${parsedContent.timeLimitMinutes} minutes to complete it.`}
+                                                </p>
+                                                <Button variant="outline" className="gap-2" asChild>
+                                                    <Link href={`/patient/assessments/${parsedContent.assessmentId || item.id}`}>
+                                                        Take Assessment
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {!isCompleted && (
+                                    <div className="mt-4 flex justify-end">
+                                        <Button
+                                            onClick={() => markItemCompleted(item.id)}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Marking as Completed...
+                                                </>
+                                            ) : "Mark as Completed"}
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
                 );
-            }
+            })}
+
+            {/* Module completion section */}
+            {sortedItems.length > 0 && (
+                <div className="mt-8 pt-4 border-t">
+                    <div className="flex justify-between items-center">
+                        <p className="text-gray-500">
+                            {Object.keys(completedItems).length} of {sortedItems.length} items completed
+                        </p>
+
+                        <div className="flex gap-2">
+                            {updatingModule ? (
+                                <Button disabled>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Completing Module...
+                                </Button>
+                            ) : (
+                                <>
+                                    <Button variant="outline" asChild>
+                                        <Link href={`/patient/programs/${programId}`}>
+                                            Return to Program
+                                        </Link>
+                                    </Button>
+
+                                    {Object.keys(completedItems).length === sortedItems.length && (
+                                        <Button
+                                            onClick={async () => {
+                                                setUpdatingModule(true);
+                                                try {
+                                                    const result = await updateModuleProgress(moduleId, 'completed');
+
+                                                    if (result.success) {
+                                                        toast({
+                                                            title: "Module Completed",
+                                                            description: "Congratulations! You've completed this module."
+                                                        });
+
+                                                        router.push(`/patient/programs/${programId}`);
+                                                        router.refresh();
+                                                    } else {
+                                                        toast({
+                                                            title: "Error",
+                                                            description: result.error?.message || "Failed to update module progress",
+                                                            variant: "destructive"
+                                                        });
+                                                    }
+                                                } catch (error) {
+                                                    console.error("Error updating module progress:", error);
+                                                    toast({
+                                                        title: "Error",
+                                                        description: "An unexpected error occurred",
+                                                        variant: "destructive"
+                                                    });
+                                                } finally {
+                                                    setUpdatingModule(false);
+                                                }
+                                            }}
+                                        >
+                                            Complete Module
+                                        </Button>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

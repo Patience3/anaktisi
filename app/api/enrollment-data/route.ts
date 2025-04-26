@@ -1,4 +1,4 @@
-// app/api/admin/enrollment-data/route.ts
+// app/api/enrollment-data/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getEnrollmentData } from "@/lib/actions/admin/dashboard";
 import { createClient } from "@/utils/supabase/server";
@@ -6,11 +6,12 @@ import { cookies } from "next/headers";
 
 export async function GET(request: NextRequest) {
     try {
-        // Auth check
+        // Auth check - fixed to use correct server client pattern
         const cookieStore = cookies();
-        const supabase = createClient();
+        const supabase = await createClient(); // Use 'await' here
 
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
 
         if (!user) {
             return NextResponse.json(
@@ -38,9 +39,9 @@ export async function GET(request: NextRequest) {
         const daysInt = days ? parseInt(days) : 30;
 
         // Get enrollment data
-        const data = await getEnrollmentData(daysInt);
+        const enrollmentData = await getEnrollmentData(daysInt);
 
-        return NextResponse.json({ success: true, data });
+        return NextResponse.json({ success: true, data: enrollmentData.data });
     } catch (error) {
         console.error("API Error:", error);
         return NextResponse.json(
