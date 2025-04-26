@@ -18,6 +18,7 @@ interface AssessmentClientProps {
     contentItemId: string;
 }
 
+
 export function AssessmentClient({ assessment, contentItemId }: AssessmentClientProps) {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, any>>({});

@@ -7,7 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getCategoryPrograms, enrollInProgram } from "@/lib/actions/patient/programs";
+import { getCategoryPrograms } from "@/lib/actions/patient/programs";
 import { ProgramModulesList } from "@/components/patient/program-modules-list";
 
 interface ProgramDetailPageProps {
@@ -52,7 +52,7 @@ export async function generateMetadata({ params }: ProgramDetailPageProps): Prom
 export default async function ProgramDetailPage({ params }: ProgramDetailPageProps) {
     const programId = params.programId;
 
-    // Fetch program details and check enrollment
+    // Fetch program details - this will only return programs the patient is enrolled in
     const categoryResponse = await getCategoryPrograms("all");
 
     if (!categoryResponse.success) {
@@ -82,45 +82,38 @@ export default async function ProgramDetailPage({ params }: ProgramDetailPagePro
     // Find the program in question
     const program = categoryResponse.data?.find(p => p.id === programId);
 
+    // If program not found or patient is not enrolled, show access denied
     if (!program) {
-        notFound();
-    }
+        return (
+            <div className="container mx-auto py-6">
+                <div className="flex flex-col gap-4">
+                    <Button variant="ghost" size="sm" asChild className="w-fit">
+                        <Link href="/patient/programs">
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Back to Programs
+                        </Link>
+                    </Button>
 
-    // Check if user is enrolled
-    const isEnrolled = !!program.enrollment;
-
-    // If not enrolled, enroll them first
-    if (!isEnrolled) {
-        const enrollmentResponse = await enrollInProgram(programId);
-
-        if (!enrollmentResponse.success) {
-            return (
-                <div className="container mx-auto py-6">
-                    <div className="flex flex-col gap-4">
-                        <Button variant="ghost" size="sm" asChild className="w-fit">
-                            <Link href="/patient/programs">
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Back to Programs
-                            </Link>
-                        </Button>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Enrollment Error</CardTitle>
-                                <CardDescription>
-                                    {enrollmentResponse.error?.message || "Failed to enroll in program"}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Button asChild>
-                                    <Link href="/patient/programs">Return to Programs</Link>
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Access Denied</CardTitle>
+                            <CardDescription>
+                                You are not enrolled in this program
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-muted-foreground mb-4">
+                                You can only access programs you have been enrolled in by your healthcare provider.
+                                Please contact your provider if you need access to this program.
+                            </p>
+                            <Button asChild>
+                                <Link href="/patient/programs">View Your Programs</Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
                 </div>
-            );
-        }
+            </div>
+        );
     }
 
     return (

@@ -1,4 +1,3 @@
-// lib/actions/patient/programs.ts
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
@@ -7,7 +6,7 @@ import { handleServerError } from "@/lib/handlers/error";
 import { getAuthUserSafe, getUserProfile } from "@/lib/auth-utils";
 import { z } from "zod";
 
-// Define proper types that match database structure
+// Define typed interfaces that match the database schema
 export interface PatientCategory {
     id: string;
     category_id: string;
@@ -36,6 +35,7 @@ export interface PatientProgramEnrollment {
     id: string;
     patient_id: string;
     program_id: string;
+    category_enrollment_id?: string;
     start_date: string;
     expected_end_date: string | null;
     completed_date: string | null;
@@ -77,14 +77,7 @@ export interface ContentItem {
     created_at: string;
 }
 
-// Interface for content count results
-interface ContentCountResult {
-    module_id: string;
-    count: string;
-}
-
-
-// Schema for module progress update
+// Validation schemas
 const UpdateModuleProgressSchema = z.object({
     moduleId: z.string().uuid("Invalid module ID"),
     status: z.enum(['in_progress', 'completed']),
@@ -168,7 +161,8 @@ export async function getPatientCategory(): Promise<ActionResponse<PatientCatego
 }
 
 /**
- * Get programs for patient's category
+ * Get programs for patient's category that they are ALREADY ENROLLED IN
+ * Patients cannot enroll themselves - only view programs they've been enrolled in by admins
  */
 export async function getCategoryPrograms(categoryId: string): Promise<ActionResponse<Program[]>> {
     try {
@@ -222,7 +216,37 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
             effectiveCategoryId = patientCategory.category_id;
         }
 
-        // Get all programs in the category
+        // First get patient's enrollments
+        const { data: enrollments, error: enrollmentError } = await supabase
+            .from("patient_enrollments")
+            .select(`
+                id,
+                patient_id,
+                program_id,
+                start_date,
+                expected_end_date,
+                completed_date,
+                status,
+                created_at
+            `)
+            .eq("patient_id", authUser.id)
+            .not("status", "eq", "dropped");
+
+        if (enrollmentError) {
+            throw enrollmentError;
+        }
+
+        if (!enrollments || enrollments.length === 0) {
+            return {
+                success: true,
+                data: []
+            };
+        }
+
+        // Get program IDs from enrollments
+        const programIds = enrollments.map(e => e.program_id);
+
+        // Get all programs that match the category AND are in the enrollment list
         const { data: programs, error } = await supabase
             .from("treatment_programs")
             .select(`
@@ -236,7 +260,7 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
                 category_id
             `)
             .eq("category_id", effectiveCategoryId)
-            .eq("is_active", true)
+            .in("id", programIds)
             .order("title");
 
         if (error) {
@@ -250,34 +274,12 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
             };
         }
 
-        // Get patient's enrollments for these programs
-        const programIds = programs.map(p => p.id);
-        const { data: enrollments, error: enrollmentsError } = await supabase
-            .from("patient_enrollments")
-            .select(`
-                id,
-                patient_id,
-                program_id,
-                start_date,
-                expected_end_date,
-                completed_date,
-                status,
-                created_at
-            `)
-            .eq("patient_id", authUser.id)
-            .in("program_id", programIds)
-            .not("status", "eq", "dropped");
-
-        if (enrollmentsError) {
-            throw enrollmentsError;
-        }
-
-        // Map enrollments to programs
-        const programsWithEnrollment = programs.map(program => {
-            const enrollment = enrollments?.find(e => e.program_id === program.id) || null;
+        // Map enrollments to programs with type safety
+        const programsWithEnrollment: Program[] = programs.map(program => {
+            const enrollment = enrollments.find(e => e.program_id === program.id) || null;
             return {
                 ...program,
-                enrollment
+                enrollment: enrollment as PatientProgramEnrollment | null
             };
         });
 
@@ -292,7 +294,7 @@ export async function getCategoryPrograms(categoryId: string): Promise<ActionRes
 }
 
 /**
- * Get modules for a specific program
+ * Get modules for a specific program with proper TypeScript typing
  */
 export async function getProgramModules(programId: string): Promise<ActionResponse<Module[]>> {
     try {
@@ -314,7 +316,7 @@ export async function getProgramModules(programId: string): Promise<ActionRespon
 
         const supabase = await createClient();
 
-        // First check if the patient is enrolled in this program
+        // First check if patient is enrolled in this program - they can only view modules if enrolled
         const { data: enrollment, error: enrollmentError } = await supabase
             .from("patient_enrollments")
             .select("id")
@@ -325,6 +327,17 @@ export async function getProgramModules(programId: string): Promise<ActionRespon
 
         if (enrollmentError && enrollmentError.code !== 'PGRST116') {
             throw enrollmentError;
+        }
+
+        // If not enrolled, return an error
+        if (!enrollment) {
+            return {
+                success: false,
+                error: {
+                    message: "You are not enrolled in this program"
+                },
+                status: 403
+            };
         }
 
         // Get modules for the program
@@ -354,82 +367,56 @@ export async function getProgramModules(programId: string): Promise<ActionRespon
             };
         }
 
-        // Count content items for each module using a typed approach
+        // Count content items for each module - use a different approach
         const moduleIds = modules.map(m => m.id);
 
-        // Use proper raw SQL through .rpc for the content counts instead of .group
-        // This avoids TypeScript errors with the group method
-        const { data: contentCountsRaw, error: contentError } = await supabase
-            .from("content_items")
-            .select('module_id, count')
-            .in('module_id', moduleIds)
-            .select('module_id, count(*)')
-            // We can cast it to the proper type after the query
-            .then(result => {
-                if (result.error) return result;
+        // Instead of doing a group by, run individual count queries for each module
+        const contentCounts: Record<string, number> = {};
 
-                // Transform the data to the format we need
-                const counts: ContentCountResult[] = result.data?.map(item => ({
-                    module_id: item.module_id as string,
-                    count: String(item.count)
-                })) || [];
+        // Alternatively, use a simpler count query by iterating through modules
+        for (const moduleId of moduleIds) {
+            const { count, error: countError } = await supabase
+                .from("content_items")
+                .select("*", { count: "exact", head: true })
+                .eq("module_id", moduleId);
 
-                return { ...result, data: counts };
-            });
-
-        if (contentError) {
-            console.error("Error fetching content counts:", contentError);
-        }
-
-        // Safely handle the content counts
-        const contentCounts = contentCountsRaw as ContentCountResult[] || [];
-
-        let modulesWithProgress: Module[] = modules;
-
-        // Get progress if patient is enrolled
-        if (enrollment) {
-            const { data: progress, error: progressError } = await supabase
-                .from("module_progress")
-                .select(`
-                    id,
-                    patient_id,
-                    module_id,
-                    enrollment_id,
-                    status,
-                    started_at,
-                    completed_at,
-                    time_spent_seconds
-                `)
-                .eq("patient_id", authUser.id)
-                .eq("enrollment_id", enrollment.id)
-                .in("module_id", moduleIds);
-
-            if (progressError) {
-                throw progressError;
+            if (!countError && count !== null) {
+                contentCounts[moduleId] = count;
             }
-
-            // Map progress to modules and add content counts
-            modulesWithProgress = modules.map(module => {
-                const moduleProgress = progress?.find(p => p.module_id === module.id) || null;
-                const contentCount = contentCounts.find(c => c.module_id === module.id);
-
-                return {
-                    ...module,
-                    progress: moduleProgress,
-                    total_content_items: contentCount ? parseInt(contentCount.count) : 0
-                };
-            });
-        } else {
-            // Just add content counts when not enrolled
-            modulesWithProgress = modules.map(module => {
-                const contentCount = contentCounts.find(c => c.module_id === module.id);
-
-                return {
-                    ...module,
-                    total_content_items: contentCount ? parseInt(contentCount.count) : 0
-                };
-            });
         }
+
+        // Get progress for modules
+        const { data: progress, error: progressError } = await supabase
+            .from("module_progress")
+            .select(`
+                id,
+                patient_id,
+                module_id,
+                enrollment_id,
+                status,
+                started_at,
+                completed_at,
+                time_spent_seconds
+            `)
+            .eq("patient_id", authUser.id)
+            .eq("enrollment_id", enrollment.id)
+            .in("module_id", moduleIds);
+
+        if (progressError) {
+            throw progressError;
+        }
+
+        // Map progress to modules and add content counts
+        const modulesWithProgress: Module[] = modules.map(module => {
+            const moduleProgress = progress?.find(p => p.module_id === module.id) || null;
+            const contentCount = contentCounts[module.id] || 0;
+
+            return {
+                ...module,
+                progress: moduleProgress as ModuleProgress | null,
+                total_content_items: contentCount
+            };
+        });
 
         return {
             success: true,
@@ -437,130 +424,6 @@ export async function getProgramModules(programId: string): Promise<ActionRespon
         };
     } catch (error) {
         console.error("Error in getProgramModules:", error);
-        return handleServerError(error);
-    }
-}
-
-/**
- * Enroll patient in a program
- */
-export async function enrollInProgram(programId: string): Promise<ActionResponse<PatientProgramEnrollment>> {
-    try {
-        // Validate the programId
-        const validProgramId = z.string().uuid("Invalid program ID").parse(programId);
-
-        // Get the authenticated user
-        const authUser = await getAuthUserSafe();
-
-        if (!authUser) {
-            return {
-                success: false,
-                error: {
-                    message: "Not authenticated"
-                },
-                status: 401
-            };
-        }
-
-        const supabase = await createClient();
-
-        // First check if patient already enrolled
-        const { data: existingEnrollment, error: checkError } = await supabase
-            .from("patient_enrollments")
-            .select("*")
-            .eq("patient_id", authUser.id)
-            .eq("program_id", validProgramId)
-            .not("status", "eq", "dropped")
-            .maybeSingle();
-
-        if (checkError && checkError.code !== 'PGRST116') {
-            throw checkError;
-        }
-
-        // If already enrolled, return the existing enrollment
-        if (existingEnrollment) {
-            return {
-                success: true,
-                data: existingEnrollment as PatientProgramEnrollment
-            };
-        }
-
-        // Get program details to check duration
-        const { data: program, error: programError } = await supabase
-            .from("treatment_programs")
-            .select("duration_days, category_id")
-            .eq("id", validProgramId)
-            .single();
-
-        if (programError) {
-            throw programError;
-        }
-
-        // Calculate expected end date if program has duration
-        const startDate = new Date().toISOString().split('T')[0];
-        let expectedEndDate = null;
-
-        if (program.duration_days) {
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() + program.duration_days);
-            expectedEndDate = endDate.toISOString().split('T')[0];
-        }
-
-        // Create new enrollment
-        const { data: enrollment, error: enrollError } = await supabase
-            .from("patient_enrollments")
-            .insert({
-                patient_id: authUser.id,
-                program_id: validProgramId,
-                start_date: startDate,
-                expected_end_date: expectedEndDate,
-                status: "in_progress"
-            })
-            .select()
-            .single();
-
-        if (enrollError) {
-            throw enrollError;
-        }
-
-        // Initialize module progress for all modules in the program
-        const { data: modules, error: modulesError } = await supabase
-            .from("learning_modules")
-            .select("id")
-            .eq("program_id", validProgramId);
-
-        if (modulesError) {
-            throw modulesError;
-        }
-
-        if (modules && modules.length > 0) {
-            const moduleProgressData = modules.map(module => ({
-                patient_id: authUser.id,
-                module_id: module.id,
-                enrollment_id: enrollment.id,
-                status: "not_started"
-            }));
-
-            const { error: progressError } = await supabase
-                .from("module_progress")
-                .insert(moduleProgressData);
-
-            if (progressError) {
-                throw progressError;
-            }
-        }
-
-        // Revalidate the patient dashboard and programs pages
-        revalidatePath('/patient');
-        revalidatePath('/patient/programs');
-        revalidatePath(`/patient/programs/${validProgramId}`);
-
-        return {
-            success: true,
-            data: enrollment as PatientProgramEnrollment
-        };
-    } catch (error) {
-        console.error("Error in enrollInProgram:", error);
         return handleServerError(error);
     }
 }
@@ -588,6 +451,41 @@ export async function getModuleContent(moduleId: string): Promise<ActionResponse
 
         const supabase = await createClient();
 
+        // First get the module to find the program
+        const { data: module, error: moduleError } = await supabase
+            .from("learning_modules")
+            .select("program_id")
+            .eq("id", validModuleId)
+            .single();
+
+        if (moduleError) {
+            throw moduleError;
+        }
+
+        // Check if patient is enrolled in this program
+        const { data: enrollment, error: enrollmentError } = await supabase
+            .from("patient_enrollments")
+            .select("id")
+            .eq("patient_id", authUser.id)
+            .eq("program_id", module.program_id)
+            .not("status", "eq", "dropped")
+            .maybeSingle();
+
+        if (enrollmentError) {
+            throw enrollmentError;
+        }
+
+        // If not enrolled, return an error
+        if (!enrollment) {
+            return {
+                success: false,
+                error: {
+                    message: "You are not enrolled in this program"
+                },
+                status: 403
+            };
+        }
+
         // Get content items for the module
         const { data, error } = await supabase
             .from("content_items")
@@ -607,9 +505,47 @@ export async function getModuleContent(moduleId: string): Promise<ActionResponse
             throw error;
         }
 
+        // Update module progress to in_progress if it's not already in_progress or completed
+        const { data: existingProgress, error: checkProgressError } = await supabase
+            .from("module_progress")
+            .select("id, status")
+            .eq("patient_id", authUser.id)
+            .eq("module_id", validModuleId)
+            .eq("enrollment_id", enrollment.id)
+            .maybeSingle();
+
+        if (!checkProgressError && (!existingProgress || existingProgress.status === 'not_started')) {
+            // Mark as in progress if not already started
+            const now = new Date().toISOString();
+            if (existingProgress) {
+                // Update existing record
+                await supabase
+                    .from("module_progress")
+                    .update({
+                        status: 'in_progress',
+                        started_at: now
+                    })
+                    .eq("id", existingProgress.id);
+            } else {
+                // Create new record
+                await supabase
+                    .from("module_progress")
+                    .insert({
+                        patient_id: authUser.id,
+                        module_id: validModuleId,
+                        enrollment_id: enrollment.id,
+                        status: 'in_progress',
+                        started_at: now
+                    });
+            }
+
+            // Revalidate paths
+            revalidatePath(`/patient/programs/${module.program_id}`);
+        }
+
         return {
             success: true,
-            data: data || []
+            data: data as ContentItem[] || []
         };
     } catch (error) {
         console.error("Error in getModuleContent:", error);

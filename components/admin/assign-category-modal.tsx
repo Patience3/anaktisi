@@ -1,3 +1,4 @@
+// components/admin/assign-category-modal.tsx
 "use client";
 
 import { useState } from "react";
@@ -86,10 +87,15 @@ export function AssignCategoryModal({
             const result = await assignPatientToCategory(patientId, data.categoryId);
 
             if (result.success) {
+                // Get the number of programs the patient was enrolled in
+                const programsEnrolled = result.data.programsEnrolled || 0;
+
+                // Show success message
                 toast({
                     title: "Category Assigned",
-                    description: `${patientName} has been assigned to the selected category.`,
+                    description: `${patientName} has been assigned to the selected category and enrolled in ${programsEnrolled} program${programsEnrolled !== 1 ? 's' : ''}.`,
                 });
+
                 setIsOpen(false);
 
                 // Refresh the page data
@@ -124,7 +130,7 @@ export function AssignCategoryModal({
                 <DialogHeader>
                     <DialogTitle>Assign Treatment Category</DialogTitle>
                     <DialogDescription>
-                        Assign {patientName} to a treatment category for more effective care.
+                        Assign {patientName} to a treatment category. This will automatically enroll the patient in all active programs within this category.
                     </DialogDescription>
                 </DialogHeader>
 

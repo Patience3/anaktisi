@@ -1,4 +1,3 @@
-// lib/actions/admin/patient.ts
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
@@ -54,16 +53,12 @@ const AssignCategorySchema = z.object({
  * Helper function to safely extract category name
  */
 function getCategoryName(programCategories: any): string {
-    // Handle if it's an array
     if (Array.isArray(programCategories) && programCategories.length > 0) {
         return programCategories[0].name || "Unknown Category";
     }
-
-    // Handle if it's an object
     if (programCategories && typeof programCategories === 'object') {
         return programCategories.name || "Unknown Category";
     }
-
     return "Unknown Category";
 }
 
@@ -76,12 +71,10 @@ export async function getAllPatients(
     categoryId?: string
 ): Promise<ActionResponse<Patient[]>> {
     try {
-        // Ensure the user is an admin
         await requireAdmin();
 
         const supabase = await createClient();
 
-        // Start with a simpler query without the complex joins
         let query = supabase
             .from("users")
             .select(`
@@ -99,12 +92,10 @@ export async function getAllPatients(
             .eq("role", "patient")
             .order("created_at", { ascending: false });
 
-        // Apply name search filter if provided
         if (searchTerm) {
             query = query.or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
         }
 
-        // Get the results
         const { data, error } = await query;
 
         if (error) {
@@ -113,39 +104,30 @@ export async function getAllPatients(
         }
 
         if (!data) {
-            return {
-                success: true,
-                data: []
-            };
+            return { success: true, data: [] };
         }
 
-        // Get categories in a separate query if needed
         const patients = data.map(patient => ({
             ...patient,
-            category: null // We'll fetch this separately if needed
+            category: null
         }));
 
-        // Return the patients without categories for now
-        return {
-            success: true,
-            data: patients
-        };
+        return { success: true, data: patients };
     } catch (error) {
         console.error("Error in getAllPatients:", error);
         return handleServerError(error);
     }
 }
+
 /**
  * Get a single patient by ID
  */
 export async function getPatientById(id: string): Promise<ActionResponse<Patient>> {
     try {
-        // Ensure the user is an admin
         await requireAdmin();
 
         const supabase = await createClient();
 
-        // Get the basic patient data first
         const { data: userData, error: userError } = await supabase
             .from("users")
             .select(`
@@ -172,160 +154,80 @@ export async function getPatientById(id: string): Promise<ActionResponse<Patient
             throw new Error("Patient not found");
         }
 
-        // Create initial patient object without category
         const patient: Patient = {
             ...userData,
             category: null
         };
 
-        // Now separately fetch the category information
         try {
-            // Query for patient_category first
             const { data: categoryData, error: categoryError } = await supabase
                 .from("patient_categories")
                 .select("category_id")
                 .eq("patient_id", id)
-                .maybeSingle();  // Use maybeSingle to avoid errors if no category
+                .maybeSingle();
 
             if (!categoryError && categoryData && categoryData.category_id) {
-                // If we found a category ID, get the category details
-                const { data: categoryInfo, error: categoryInfoError } = await supabase
+                const { data: categoryDetails } = await supabase
                     .from("program_categories")
                     .select("id, name")
                     .eq("id", categoryData.category_id)
                     .single();
 
-                if (!categoryInfoError && categoryInfo) {
-                    // Now add the category to the patient object
+                if (categoryDetails) {
                     patient.category = {
-                        id: categoryInfo.id,
-                        name: categoryInfo.name
+                        id: categoryDetails.id,
+                        name: categoryDetails.name
                     };
                 }
             }
-        } catch (e) {
-            // Log but don't fail
-            console.error("Error fetching category data:", e);
-        }
-        console.log("DEBUG: Patient data before return:", patient);
-        console.log("DEBUG: Patient category:", patient.category);
-
-        return {
-            success: true,
-            data: patient
-        };
-    } catch (error) {
-        return handleServerError(error);
-    }
-}
-/**
- * Update patient active status
- */
-export async function updatePatientStatus(
-    patientId: string,
-    isActive: boolean
-): Promise<ActionResponse<{ updated: boolean }>> {
-    try {
-        // Validate input
-        const validData = UpdatePatientStatusSchema.parse({ patientId, isActive });
-
-        // Ensure the user is an admin
-        await requireAdmin();
-
-        const supabase = await createClient();
-
-        const { error } = await supabase
-            .from("users")
-            .update({
-                is_active: validData.isActive,
-                updated_at: new Date().toISOString()
-            })
-            .eq("id", validData.patientId)
-            .eq("role", "patient");
-
-        if (error) {
-            throw error;
+        } catch (catError) {
+            console.error("Error fetching patient category:", catError);
         }
 
-        // Revalidate the patients page to refresh the data
-        revalidatePath("/admin/patients");
-        revalidatePath(`/admin/patients/${patientId}`);
-
-        return {
-            success: true,
-            data: { updated: true }
-        };
+        return { success: true, data: patient };
     } catch (error) {
+        console.error("Error in getPatientById:", error);
         return handleServerError(error);
     }
 }
 
 /**
- * Update patient information
- */
-export async function updatePatient(
-    data: z.infer<typeof EditPatientSchema>
-): Promise<ActionResponse<{ updated: boolean }>> {
-    try {
-        // Validate the patient data
-        const validData = EditPatientSchema.parse(data);
-
-        // Ensure the user is an admin
-        await requireAdmin();
-
-        const supabase = await createClient();
-
-        // Update patient data
-        const { error } = await supabase
-            .from("users")
-            .update({
-                first_name: validData.firstName,
-                last_name: validData.lastName,
-                email: validData.email,
-                is_active: validData.isActive,
-                date_of_birth: validData.dateOfBirth || null,
-                gender: validData.gender ==="none" || null,
-                phone: validData.phone || null,
-                updated_at: new Date().toISOString()
-            })
-            .eq("id", validData.patientId)
-            .eq("role", "patient");
-
-        if (error) {
-            throw error;
-        }
-
-        // Revalidate the patients pages to refresh the data
-        revalidatePath("/admin/patients");
-        revalidatePath(`/admin/patients/${validData.patientId}`);
-        revalidatePath(`/admin/patients/${validData.patientId}/edit`);
-
-        return {
-            success: true,
-            data: { updated: true }
-        };
-    } catch (error) {
-        return handleServerError(error);
-    }
-}
-
-/**
- * Assign a patient to a treatment category
+ * Assign a patient to a treatment category and automatically enroll in all programs
  */
 export async function assignPatientToCategory(
     patientId: string,
     categoryId: string
 ): Promise<ActionResponse<any>> {
     try {
-        // Validate the data
-        const validData = AssignCategorySchema.parse({ patientId, categoryId });
+        const validData = z.object({
+            patientId: z.string().uuid("Invalid patient ID"),
+            categoryId: z.string().uuid("Invalid category ID")
+        }).parse({ patientId, categoryId });
 
-        // Ensure the user is an admin
         const { user } = await requireAdmin();
-
         const supabase = await createClient();
 
-        // First, remove any existing category assignments for this patient
+        const { data: patient, error: patientError } = await supabase
+            .from("users")
+            .select("id")
+            .eq("id", validData.patientId)
+            .eq("role", "patient")
+            .single();
+
+        if (patientError) {
+            throw new Error("Patient not found");
+        }
+
+        const { data: category, error: categoryError } = await supabase
+            .from("program_categories")
+            .select("id, name")
+            .eq("id", validData.categoryId)
+            .single();
+
+        if (categoryError) {
+            throw new Error("Category not found");
+        }
+
         const { error: deleteError } = await supabase
             .from("patient_categories")
             .delete()
@@ -336,8 +238,7 @@ export async function assignPatientToCategory(
             throw deleteError;
         }
 
-        // Create the new category assignment
-        const { data, error } = await supabase
+        const { data: categoryAssignment, error: assignmentError } = await supabase
             .from("patient_categories")
             .insert({
                 patient_id: validData.patientId,
@@ -348,119 +249,99 @@ export async function assignPatientToCategory(
             .select()
             .single();
 
-        if (error) {
-            console.error("Insert error:", error);
-            throw error;
+        if (assignmentError) {
+            console.error("Insert error:", assignmentError);
+            throw assignmentError;
         }
 
-        // Revalidate the patients page to refresh the data
+        const { data: programs, error: programsError } = await supabase
+            .from("treatment_programs")
+            .select("id, duration_days")
+            .eq("category_id", validData.categoryId)
+            .eq("is_active", true);
+
+        if (programsError) {
+            console.error("Error fetching programs:", programsError);
+            throw programsError;
+        }
+
+        if (programs && programs.length > 0) {
+            const startDate = new Date().toISOString().split('T')[0];
+
+            const enrollments = programs.map(program => {
+                let expectedEndDate = null;
+                if (program.duration_days) {
+                    const endDate = new Date();
+                    endDate.setDate(endDate.getDate() + program.duration_days);
+                    expectedEndDate = endDate.toISOString().split('T')[0];
+                }
+                return {
+                    patient_id: validData.patientId,
+                    program_id: program.id,
+                    category_enrollment_id: categoryAssignment.id,
+                    enrolled_by: user.id,
+                    start_date: startDate,
+                    expected_end_date: expectedEndDate,
+                    status: "in_progress"
+                };
+            });
+
+            const { data: enrollmentResults, error: enrollmentError } = await supabase
+                .from("patient_enrollments")
+                .insert(enrollments)
+                .select();
+
+            if (enrollmentError) {
+                console.error("Error creating enrollments:", enrollmentError);
+                throw enrollmentError;
+            }
+
+            for (const program of programs) {
+                const { data: modules, error: modulesError } = await supabase
+                    .from("learning_modules")
+                    .select("id")
+                    .eq("program_id", program.id);
+
+                if (modulesError) {
+                    console.error(`Error fetching modules for program ${program.id}:`, modulesError);
+                    continue;
+                }
+
+                if (modules && modules.length > 0) {
+                    const enrollment = enrollmentResults.find(e => e.program_id === program.id);
+
+                    if (enrollment) {
+                        const moduleProgressData = modules.map(module => ({
+                            patient_id: validData.patientId,
+                            module_id: module.id,
+                            enrollment_id: enrollment.id,
+                            status: "not_started"
+                        }));
+
+                        const { error: progressError } = await supabase
+                            .from("module_progress")
+                            .insert(moduleProgressData);
+
+                        if (progressError) {
+                            console.error(`Error creating module progress for program ${program.id}:`, progressError);
+                        }
+                    }
+                }
+            }
+        }
+
         revalidatePath("/admin/patients");
         revalidatePath(`/admin/patients/${patientId}`);
-        revalidatePath("/");
+        revalidatePath("/patient");
+        revalidatePath("/patient/programs");
+        revalidatePath("/patient/assessments");
 
         return {
             success: true,
-            data
-        };
-    } catch (error) {
-        return handleServerError(error);
-    }
-}
-
-/**
- * Get available categories for filtering patient list
- */
-export async function getCategoriesForFilter(): Promise<ActionResponse<{id: string, name: string}[]>> {
-    try {
-        // Ensure the user is an admin
-        await requireAdmin();
-
-        const supabase = await createClient();
-
-        const { data, error } = await supabase
-            .from("program_categories")
-            .select("id, name")
-            .order("name");
-
-        if (error) {
-            throw error;
-        }
-
-        return {
-            success: true,
-            data: data || []
-        };
-    } catch (error) {
-        return handleServerError(error);
-    }
-}
-
-/**
- * Create a new patient account
- */
-export async function createPatientAccount(
-    data: z.infer<typeof CreatePatientSchema> & { programId?: string }
-): Promise<ActionResponse<{ tempPassword: string }>> {
-    try {
-        // Ensure the user is an admin
-        const { user: adminUser } = await requireAdmin();
-
-        // Validate patient data
-        const validData = CreatePatientSchema.parse(data);
-
-        const supabase = await createClient();
-
-        // Generate a temporary password
-        const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
-
-        // Create the user account in Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-            email: validData.email,
-            password: tempPassword,
-            email_confirm: true, // Skip email confirmation
-        });
-
-        if (authError) {
-            throw authError;
-        }
-
-        if (!authData.user) {
-            throw new Error("Failed to create user account");
-        }
-
-        // Create the user profile in your database
-        const { error: profileError } = await supabase
-            .from("users")
-            .update({
-                first_name: validData.firstName,
-                last_name: validData.lastName,
-                date_of_birth: validData.dateOfBirth || null,
-                gender: validData.gender || null,
-                phone: validData.phone || null,
-                role: "patient",
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            })
-            .eq("id", authData.user.id);
-
-        if (profileError) {
-            // If profile creation fails, attempt to delete the auth user to avoid orphaned accounts
-            await supabase.auth.admin.deleteUser(authData.user.id);
-            throw profileError;
-        }
-
-        // If programId is provided, enroll the patient in the program
-        if (data.programId) {
-            // Implementation for program enrollment would go here
-        }
-
-        // Revalidate the patients list
-        revalidatePath("/admin/patients");
-
-        return {
-            success: true,
-            data: { tempPassword }
+            data: {
+                categoryAssignment,
+                programsEnrolled: programs?.length || 0
+            }
         };
     } catch (error) {
         return handleServerError(error);
