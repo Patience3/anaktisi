@@ -2,6 +2,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getPatientById } from "@/lib/actions/admin/patient";
 import { getCategoriesForFilter } from "@/lib/actions/admin/patient";
+import { getPatientEnrolledPrograms, getPatientCategory } from "@/lib/actions/admin/patient-programs";
 import { requireAdmin } from "@/lib/auth-utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import Link from "next/link";
 import { ArrowLeft, Mail, Phone, Calendar, Users } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PatientCategorySection } from "@/components/admin/patient-category-section";
+import { PatientProgramsSection } from "@/components/admin/patient-programs-section";
 import { Separator } from "@/components/ui/separator";
 import { Metadata } from "next";
 import { TogglePatientStatusButton } from "@/components/admin/toggle-patient-status-button";
@@ -45,6 +47,7 @@ export default async function PatientDetailPage({ params }: PatientDetailProps) 
         // Redirect to login if not authorized
         redirect("/login");
     }
+
     const patientId = params.patientId;
 
     // Fetch patient data
@@ -59,6 +62,14 @@ export default async function PatientDetailPage({ params }: PatientDetailProps) 
     // Fetch all categories for assignment
     const categoriesResponse = await getCategoriesForFilter();
     const categories = categoriesResponse.success ? categoriesResponse.data || [] : [];
+
+    // Fetch patient's enrolled programs
+    const programsResponse = await getPatientEnrolledPrograms(patientId);
+    const programs = programsResponse.success ? programsResponse.data || [] : [];
+
+    // Fetch patient's category details
+    const categoryResponse = await getPatientCategory(patientId);
+    const categoryDetails = categoryResponse.success ? categoryResponse.data : null;
 
     // Format the date of birth
     const formattedDob = patient.date_of_birth
@@ -92,9 +103,9 @@ export default async function PatientDetailPage({ params }: PatientDetailProps) 
                     <CardContent className="space-y-6">
                         <div className="flex flex-col items-center space-y-3">
                             <div className="h-24 w-24 rounded-full bg-blue-100 flex items-center justify-center">
-                <span className="text-blue-800 font-bold text-2xl">
-                  {patient.first_name[0]}{patient.last_name[0]}
-                </span>
+                                <span className="text-blue-800 font-bold text-2xl">
+                                    {patient.first_name[0]}{patient.last_name[0]}
+                                </span>
                             </div>
                             <h2 className="text-xl font-semibold">
                                 {patient.first_name} {patient.last_name}
@@ -168,20 +179,20 @@ export default async function PatientDetailPage({ params }: PatientDetailProps) 
 
                 {/* Main Content Area */}
                 <div className="md:col-span-2 space-y-6">
-                    <Tabs defaultValue="category" className="w-full">
+                    <Tabs defaultValue="treatment" className="w-full">
                         <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="category">Category</TabsTrigger>
+                            <TabsTrigger value="treatment">Treatment</TabsTrigger>
                             <TabsTrigger value="progress">Progress</TabsTrigger>
                             <TabsTrigger value="assessments">Assessments</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="category" className="mt-6">
+                        <TabsContent value="treatment" className="mt-6 space-y-6">
+                            {/* Category Section */}
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Treatment Category</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    {/* We use the client component here to handle category assignment UI interactions */}
                                     <PatientCategorySection
                                         patient={{
                                             id: patient.id,
@@ -195,6 +206,16 @@ export default async function PatientDetailPage({ params }: PatientDetailProps) 
                                     />
                                 </CardContent>
                             </Card>
+
+                            {/* Programs Section */}
+                            <PatientProgramsSection
+                                patientId={patient.id}
+                                patientName={`${patient.first_name} ${patient.last_name}`}
+                                categoryId={categoryDetails?.categoryId}
+                                categoryName={categoryDetails?.categoryName}
+                                categoryEnrollmentId={categoryDetails?.id}
+                                programs={programs}
+                            />
                         </TabsContent>
 
                         <TabsContent value="progress" className="mt-6">

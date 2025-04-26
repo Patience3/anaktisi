@@ -312,46 +312,20 @@ export async function updatePatient(
 /**
  * Assign a patient to a treatment category
  */
-/**
- * Assign a patient to a treatment category and automatically enroll in all programs
- */
 export async function assignPatientToCategory(
     patientId: string,
     categoryId: string
 ): Promise<ActionResponse<any>> {
     try {
-        const validData = z.object({
-            patientId: z.string().uuid("Invalid patient ID"),
-            categoryId: z.string().uuid("Invalid category ID")
-        }).parse({ patientId, categoryId });
+        // Validate the data
+        const validData = AssignCategorySchema.parse({ patientId, categoryId });
 
+        // Ensure the user is an admin
         const { user } = await requireAdmin();
+
         const supabase = await createClient();
 
-        // Check if patient exists
-        const { data: patient, error: patientError } = await supabase
-            .from("users")
-            .select("id")
-            .eq("id", validData.patientId)
-            .eq("role", "patient")
-            .single();
-
-        if (patientError) {
-            throw new Error("Patient not found");
-        }
-
-        // Check if category exists
-        const { data: category, error: categoryError } = await supabase
-            .from("program_categories")
-            .select("id, name")
-            .eq("id", validData.categoryId)
-            .single();
-
-        if (categoryError) {
-            throw new Error("Category not found");
-        }
-
-        // If the patient already has a category, clear it before assigning the new one
+        // First, remove any existing category assignments for this patient
         const { error: deleteError } = await supabase
             .from("patient_categories")
             .delete()
@@ -362,8 +336,8 @@ export async function assignPatientToCategory(
             throw deleteError;
         }
 
-        // Assign new category
-        const { data: categoryAssignment, error: assignmentError } = await supabase
+        // Create the new category assignment
+        const { data, error } = await supabase
             .from("patient_categories")
             .insert({
                 patient_id: validData.patientId,
@@ -374,127 +348,19 @@ export async function assignPatientToCategory(
             .select()
             .single();
 
-        if (assignmentError) {
-            console.error("Insert error:", assignmentError);
-            throw assignmentError;
+        if (error) {
+            console.error("Insert error:", error);
+            throw error;
         }
 
-        // Get all active programs in this category
-        const { data: programs, error: programsError } = await supabase
-            .from("treatment_programs")
-            .select("id, duration_days")
-            .eq("category_id", validData.categoryId)
-            .eq("is_active", true);
-
-        if (programsError) {
-            console.error("Error fetching programs:", programsError);
-            throw programsError;
-        }
-
-        // Auto-enroll the patient in all programs
-        const enrollmentResults = [];
-
-        if (programs && programs.length > 0) {
-            // First, cancel any existing program enrollments
-            const { error: cancelError } = await supabase
-                .from("patient_enrollments")
-                .update({ status: "dropped" })
-                .eq("patient_id", validData.patientId)
-                .in("status", ["assigned", "in_progress"]);
-
-            if (cancelError) {
-                console.error("Error canceling existing enrollments:", cancelError);
-            }
-
-            // Clear existing module progress
-            const { error: progressError } = await supabase
-                .from("module_progress")
-                .delete()
-                .eq("patient_id", validData.patientId);
-
-            if (progressError) {
-                console.error("Error clearing module progress:", progressError);
-            }
-
-            // Now create new enrollments
-            const startDate = new Date().toISOString().split('T')[0];
-            const enrollments = programs.map(program => {
-                let expectedEndDate = null;
-                if (program.duration_days) {
-                    const endDate = new Date();
-                    endDate.setDate(endDate.getDate() + program.duration_days);
-                    expectedEndDate = endDate.toISOString().split('T')[0];
-                }
-
-                return {
-                    patient_id: validData.patientId,
-                    program_id: program.id,
-                    category_enrollment_id: categoryAssignment.id,
-                    enrolled_by: user.id,
-                    start_date: startDate,
-                    expected_end_date: expectedEndDate,
-                    status: "in_progress"
-                };
-            });
-
-            const { data: enrollmentResults, error: enrollmentError } = await supabase
-                .from("patient_enrollments")
-                .insert(enrollments)
-                .select();
-
-            if (enrollmentError) {
-                console.error("Error creating enrollments:", enrollmentError);
-                throw enrollmentError;
-            }
-
-            // Initialize module progress for each program
-            for (const program of programs) {
-                const { data: modules, error: modulesError } = await supabase
-                    .from("learning_modules")
-                    .select("id")
-                    .eq("program_id", program.id);
-
-                if (modulesError) {
-                    console.error(`Error fetching modules for program ${program.id}:`, modulesError);
-                    continue;
-                }
-
-                if (modules && modules.length > 0) {
-                    const enrollment = enrollmentResults.find(e => e.program_id === program.id);
-
-                    if (enrollment) {
-                        const moduleProgressData = modules.map(module => ({
-                            patient_id: validData.patientId,
-                            module_id: module.id,
-                            enrollment_id: enrollment.id,
-                            status: "not_started"
-                        }));
-
-                        const { error: progressError } = await supabase
-                            .from("module_progress")
-                            .insert(moduleProgressData);
-
-                        if (progressError) {
-                            console.error(`Error creating module progress for program ${program.id}:`, progressError);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Revalidate relevant paths
+        // Revalidate the patients page to refresh the data
         revalidatePath("/admin/patients");
         revalidatePath(`/admin/patients/${patientId}`);
-        revalidatePath("/patient");
-        revalidatePath("/patient/programs");
-        revalidatePath("/patient/assessments");
+        revalidatePath("/");
 
         return {
             success: true,
-            data: {
-                categoryAssignment,
-                programsEnrolled: programs?.length || 0
-            }
+            data
         };
     } catch (error) {
         return handleServerError(error);

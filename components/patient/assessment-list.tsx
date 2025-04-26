@@ -1,4 +1,3 @@
-// components/patient/assessment-list.tsx
 "use client";
 
 import { useState } from "react";
@@ -11,9 +10,9 @@ import { ArrowRight, Clock, FileText, CheckCircle, XCircle, BookOpen } from "luc
 interface Assessment {
     id: string;
     title: string;
-    description: string;
+    description: string | null;
     passingScore: number;
-    timeLimit?: number;
+    timeLimit?: number | null;
     contentItemId: string;
     moduleId: string;
     moduleName: string;
@@ -22,9 +21,9 @@ interface Assessment {
     latestAttempt?: {
         id: string;
         startedAt: string;
-        completedAt?: string;
-        score?: number;
-        passed?: boolean;
+        completedAt?: string | null;
+        score?: number | null;
+        passed?: boolean | null;
     } | null;
     completed: boolean;
 }
@@ -38,7 +37,8 @@ interface AssessmentListProps {
 export function AssessmentList({ assessments, emptyMessage, type }: AssessmentListProps) {
     const [filter, setFilter] = useState<string | null>(null);
 
-    if (assessments.length === 0) {
+    // Check if assessments array is undefined or empty
+    if (!assessments || assessments.length === 0) {
         return (
             <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
@@ -50,7 +50,7 @@ export function AssessmentList({ assessments, emptyMessage, type }: AssessmentLi
     }
 
     // Get unique programs for filtering
-    const programs = [...new Set(assessments.map(a => a.programName))];
+    const programs = [...new Set(assessments.map(a => a.programName).filter(Boolean))];
 
     // Apply program filter if set
     const filteredAssessments = filter
@@ -61,12 +61,12 @@ export function AssessmentList({ assessments, emptyMessage, type }: AssessmentLi
     const sortedAssessments = [...filteredAssessments].sort((a, b) => {
         // First by program name
         if (a.programName !== b.programName) {
-            return a.programName.localeCompare(b.programName);
+            return (a.programName || "").localeCompare(b.programName || "");
         }
 
         // Then by module name
         if (a.moduleName !== b.moduleName) {
-            return a.moduleName.localeCompare(b.moduleName);
+            return (a.moduleName || "").localeCompare(b.moduleName || "");
         }
 
         // Then by completion status (incomplete first)
@@ -75,7 +75,7 @@ export function AssessmentList({ assessments, emptyMessage, type }: AssessmentLi
         }
 
         // Then by title
-        return a.title.localeCompare(b.title);
+        return (a.title || "").localeCompare(b.title || "");
     });
 
     return (
@@ -109,9 +109,9 @@ export function AssessmentList({ assessments, emptyMessage, type }: AssessmentLi
                         <CardHeader>
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <CardTitle>{assessment.title}</CardTitle>
+                                    <CardTitle>{assessment.title || "Untitled Assessment"}</CardTitle>
                                     <CardDescription className="mt-1">
-                                        From {assessment.programName} / {assessment.moduleName}
+                                        From {assessment.programName || "Unknown Program"} / {assessment.moduleName || "Unknown Module"}
                                     </CardDescription>
                                 </div>
 

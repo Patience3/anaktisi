@@ -1,4 +1,3 @@
-// components/admin/assign-category-modal.tsx
 "use client";
 
 import { useState } from "react";
@@ -34,7 +33,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Tag } from "lucide-react";
+import { EnrollProgramsModal } from "./enroll-programs-modal";
 
 // Validation schema for category assignment
 const AssignCategoryFormSchema = z.object({
@@ -68,6 +68,8 @@ export function AssignCategoryModal({
                                     }: AssignCategoryModalProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<CategoryInfo | null>(null);
     const { toast } = useToast();
     const router = useRouter();
 
@@ -87,22 +89,33 @@ export function AssignCategoryModal({
             const result = await assignPatientToCategory(patientId, data.categoryId);
 
             if (result.success) {
+                // Find selected category for enrollment dialog
+                const category = categories.find(c => c.id === data.categoryId);
+                if (category) {
+                    setSelectedCategory(category);
+                }
+
                 // Get the number of programs the patient was enrolled in
-                const programsEnrolled = result.data.programsEnrolled || 0;
+                const programsEnrolled = result.data?.programsEnrolled || 0;
 
                 // Show success message
                 toast({
                     title: "Category Assigned",
-                    description: `${patientName} has been assigned to the selected category and enrolled in ${programsEnrolled} program${programsEnrolled !== 1 ? 's' : ''}.`,
+                    description: `${patientName} has been assigned to the selected category.`,
                 });
 
-                setIsOpen(false);
-
-                // Refresh the page data
-                if (onSuccess) {
-                    onSuccess();
+                // Ask if they want to enroll in programs
+                if (programsEnrolled === 0) {
+                    setShowEnrollDialog(true);
                 } else {
-                    router.refresh();
+                    setIsOpen(false);
+
+                    // Refresh the page data
+                    if (onSuccess) {
+                        onSuccess();
+                    } else {
+                        router.refresh();
+                    }
                 }
             } else {
                 toast({
@@ -123,65 +136,115 @@ export function AssignCategoryModal({
         }
     };
 
+    const handleEnrollComplete = () => {
+        setShowEnrollDialog(false);
+        setIsOpen(false);
+
+        if (onSuccess) {
+            onSuccess();
+        } else {
+            router.refresh();
+        }
+    };
+
+    const handleCategoryChange = (categoryId: string) => {
+        form.setValue("categoryId", categoryId);
+
+        // Update selected category for potential enrollment
+        const category = categories.find(c => c.id === categoryId);
+        if (category) {
+            setSelectedCategory(category);
+        } else {
+            setSelectedCategory(null);
+        }
+    };
+
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Assign Treatment Category</DialogTitle>
-                    <DialogDescription>
-                        Assign {patientName} to a treatment category. This will automatically enroll the patient in all active programs within this category.
-                    </DialogDescription>
-                </DialogHeader>
+        <>
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogTrigger asChild>{children}</DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Assign Treatment Category</DialogTitle>
+                        <DialogDescription>
+                            Assign {patientName} to a treatment category. This will enable you to enroll the patient in programs within this category.
+                        </DialogDescription>
+                    </DialogHeader>
 
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <FormField
-                            control={form.control}
-                            name="categoryId"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Treatment Category</FormLabel>
-                                    <Select
-                                        onValueChange={field.onChange}
-                                        defaultValue={field.value}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select a category" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {categories.map((category) => (
-                                                <SelectItem key={category.id} value={category.id}>
-                                                    {category.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormDescription>
-                                        Select the most appropriate treatment category for this patient
-                                    </FormDescription>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-
-                        <DialogFooter>
-                            <Button type="submit" disabled={isLoading}>
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Assigning...
-                                    </>
-                                ) : (
-                                    "Assign Category"
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                            <FormField
+                                control={form.control}
+                                name="categoryId"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Treatment Category</FormLabel>
+                                        <Select
+                                            onValueChange={handleCategoryChange}
+                                            defaultValue={field.value}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select a category" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {categories.map((category) => (
+                                                    <SelectItem key={category.id} value={category.id}>
+                                                        {category.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormDescription>
+                                            Select the most appropriate treatment category for this patient
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
                                 )}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </Form>
-            </DialogContent>
-        </Dialog>
+                            />
+
+                            {selectedCategory && selectedCategory.description && (
+                                <div className="bg-slate-50 p-3 rounded-md border text-sm text-gray-700">
+                                    <div className="flex items-center gap-2 font-medium mb-1">
+                                        <Tag className="h-4 w-4 text-blue-600" />
+                                        <span>{selectedCategory.name}</span>
+                                    </div>
+                                    <p>{selectedCategory.description}</p>
+                                </div>
+                            )}
+
+                            <DialogFooter>
+                                <Button type="submit" disabled={isLoading}>
+                                    {isLoading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Assigning...
+                                        </>
+                                    ) : (
+                                        "Assign Category"
+                                    )}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </Form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Enrollment Dialog */}
+            {showEnrollDialog && selectedCategory && (
+                <EnrollProgramsModal
+                    patientId={patientId}
+                    patientName={patientName}
+                    categoryId={selectedCategory.id}
+                    categoryName={selectedCategory.name}
+                    onSuccess={handleEnrollComplete}
+                >
+                    <Button onClick={() => setShowEnrollDialog(false)} className="hidden">
+                        Hidden Trigger
+                    </Button>
+                </EnrollProgramsModal>
+            )}
+        </>
     );
 }

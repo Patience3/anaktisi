@@ -1,4 +1,3 @@
-// components/admin/patient-form.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -26,11 +25,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getAllPrograms } from "@/lib/actions/admin/program";
+import { getCategoriesForFilter } from "@/lib/actions/admin/patient";
 
-// Extend the CreatePatientSchema to include optional programId
+// Extend the CreatePatientSchema to include optional categoryId
 const ExtendedCreatePatientSchema = CreatePatientSchema.extend({
-    programId: z.string().uuid("Valid program ID is required").optional(),
+    categoryId: z.string().uuid("Valid category ID is required").optional(),
 });
 
 // Infer the type from the Zod schema
@@ -40,16 +39,17 @@ interface PatientFormProps {
     onSuccess: (tempPassword: string) => void;
 }
 
-interface Program {
+interface Category {
     id: string;
-    title: string;
+    name: string;
+    description?: string;
 }
 
 export function PatientForm({ onSuccess }: PatientFormProps) {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [programs, setPrograms] = useState<Program[]>([]);
-    const [isLoadingPrograms, setIsLoadingPrograms] = useState(true);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
     // Initialize React Hook Form with Zod resolver
     const form = useForm<PatientFormValues>({
@@ -61,33 +61,30 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
             dateOfBirth: "",
             gender: "",
             phone: "",
-            programId: undefined,
+            categoryId: undefined,
         },
     });
 
-    // Fetch programs when component mounts
+    // Fetch categories when component mounts
     useEffect(() => {
-        async function fetchPrograms() {
-            setIsLoadingPrograms(true);
+        async function fetchCategories() {
+            setIsLoadingCategories(true);
             try {
-                const result = await getAllPrograms();
+                const result = await getCategoriesForFilter();
 
                 if (result.success && result.data) {
-                    setPrograms(result.data.map(p => ({
-                        id: p.id,
-                        title: p.title
-                    })));
+                    setCategories(result.data);
                 } else {
-                    console.error("Failed to fetch programs:", result.error);
+                    console.error("Failed to fetch categories:", result.error);
                 }
             } catch (e) {
-                console.error("Error fetching programs:", e);
+                console.error("Error fetching categories:", e);
             } finally {
-                setIsLoadingPrograms(false);
+                setIsLoadingCategories(false);
             }
         }
 
-        fetchPrograms();
+        fetchCategories();
     }, []);
 
     async function onSubmit(data: PatientFormValues) {
@@ -242,42 +239,42 @@ export function PatientForm({ onSuccess }: PatientFormProps) {
 
                 <FormField
                     control={form.control}
-                    name="programId"
+                    name="categoryId"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Initial Program (Optional)</FormLabel>
+                            <FormLabel>Treatment Category (Optional)</FormLabel>
                             <Select
                                 onValueChange={field.onChange}
                                 defaultValue={field.value}
                             >
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a program (optional)" />
+                                        <SelectValue placeholder="Select a treatment category (optional)" />
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    {isLoadingPrograms ? (
+                                    {isLoadingCategories ? (
                                         <SelectItem value="loading" disabled>
-                                            Loading programs...
+                                            Loading categories...
                                         </SelectItem>
-                                    ) : programs.length > 0 ? (
+                                    ) : categories.length > 0 ? (
                                         <>
-                                            <SelectItem value="none">No program</SelectItem>
-                                            {programs.map(program => (
-                                                <SelectItem key={program.id} value={program.id}>
-                                                    {program.title}
+                                            <SelectItem value="none">No category</SelectItem>
+                                            {categories.map(category => (
+                                                <SelectItem key={category.id} value={category.id}>
+                                                    {category.name}
                                                 </SelectItem>
                                             ))}
                                         </>
                                     ) : (
                                         <SelectItem value="none" disabled>
-                                            No programs available
+                                            No categories available
                                         </SelectItem>
                                     )}
                                 </SelectContent>
                             </Select>
                             <FormDescription>
-                                Optionally assign a treatment program at creation
+                                Optionally assign a treatment category at creation
                             </FormDescription>
                             <FormMessage />
                         </FormItem>

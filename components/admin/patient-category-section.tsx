@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tag, BookOpen } from "lucide-react";
+import { Tag, BookOpen, ListPlus } from "lucide-react";
 import { AssignCategoryModal } from "@/components/admin/assign-category-modal";
+import { EnrollProgramsModal } from "@/components/admin/enroll-programs-modal";
 
 // Define proper types
 interface Patient {
@@ -33,10 +34,6 @@ interface PatientCategorySectionProps {
 
 export function PatientCategorySection({ patient, categories }: PatientCategorySectionProps) {
     const router = useRouter();
-
-    // Add debugging
-    console.log("Patient received in category section:", patient);
-    console.log("Patient category:", patient.category);
 
     const handleSuccess = () => {
         // Force a refresh to get the latest data
@@ -80,16 +77,29 @@ export function PatientCategorySection({ patient, categories }: PatientCategoryS
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                     <Button variant="outline" size="sm" asChild>
-                        <div
+                        <Link
+                            href={`/admin/categories/${patient.category?.id}`}
                             className="flex items-center gap-2"
-                            onClick={() => window.location.href = `/admin/categories/${patient.category?.id}`}
                         >
                             <BookOpen className="h-4 w-4" />
                             View Programs in Category
-                        </div>
+                        </Link>
                     </Button>
+
+                    <EnrollProgramsModal
+                        patientId={patient.id}
+                        patientName={`${patient.first_name} ${patient.last_name}`}
+                        categoryId={patient.category.id}
+                        categoryName={patient.category.name}
+                        onSuccess={handleSuccess}
+                    >
+                        <Button variant="secondary" size="sm" className="flex items-center gap-2">
+                            <ListPlus className="h-4 w-4" />
+                            Enroll in Programs
+                        </Button>
+                    </EnrollProgramsModal>
 
                     <AssignCategoryModal
                         patientId={patient.id}
@@ -107,3 +117,6 @@ export function PatientCategorySection({ patient, categories }: PatientCategoryS
         </div>
     );
 }
+
+// Import Link to fix the compilation error
+import Link from "next/link";

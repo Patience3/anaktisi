@@ -183,3 +183,74 @@ interface GetPaginatedParams {
     filter?: string;
     sort?: string;
 }
+
+// types/action.ts
+
+/**
+ * Generic interface for action options
+ */
+export interface ActionOptions<T> {
+    params: T;
+    schema?: any;
+    authorize?: boolean;
+    requiredRole?: string;
+}
+
+/**
+ * Generic interface for successful action response
+ */
+export interface ActionSuccess<T> {
+    params: T;
+    supabase: any;
+    session: any;
+    user?: any;
+    profile?: any;
+}
+
+/**
+ * Generic interface for API/action responses
+ */
+export interface ActionResponse<T> {
+    success: boolean;
+    data?: T;
+    error?: {
+        message: string;
+        details?: Record<string, string[]>;
+    };
+    status?: number;
+}
+
+/**
+ /**
+ * Interface for patient enrollment response
+ */
+export interface EnrollmentResponse {
+    enrollments: {
+        id: string;
+        patient_id: string;
+        program_id: string;
+        category_enrollment_id: string;
+        enrolled_by: string;
+        start_date: string;
+        expected_end_date: string | null;
+        completed_date: string | null;
+        status: string;
+        created_at: string;
+        updated_at: string;
+    }[];
+    enrolledPrograms: number;
+}
+
+/**
+ * Interface for category assignment response
+ */
+export interface CategoryAssignmentResponse {
+    categoryAssignment: {
+        id: string;
+        patient_id: string;
+        category_id: string;
+        assigned_by: string;
+        assigned_at: string;
+    };
+    programsEnrolled: number;
+}

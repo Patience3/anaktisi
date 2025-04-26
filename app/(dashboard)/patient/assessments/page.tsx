@@ -75,6 +75,13 @@ export default async function AssessmentsPage() {
     const categoryId = categoryResponse.data.category_id;
     const assessmentsResponse = await getPatientAssessments(categoryId);
 
+    // Handle the case where assessmentsResponse.data might be null
+    const availableAssessments = assessmentsResponse.success && assessmentsResponse.data ?
+        assessmentsResponse.data.available || [] : [];
+
+    const completedAssessments = assessmentsResponse.success && assessmentsResponse.data ?
+        assessmentsResponse.data.completed || [] : [];
+
     return (
         <div className="container mx-auto py-6">
             <div className="flex flex-col gap-2 mb-6">
@@ -105,7 +112,7 @@ export default async function AssessmentsPage() {
                 <TabsContent value="available">
                     <Suspense fallback={<AssessmentSkeleton />}>
                         <AssessmentList
-                            assessments={assessmentsResponse.success ? assessmentsResponse.data.available : []}
+                            assessments={availableAssessments}
                             emptyMessage="No available assessments"
                             type="available"
                         />
@@ -115,7 +122,7 @@ export default async function AssessmentsPage() {
                 <TabsContent value="completed">
                     <Suspense fallback={<AssessmentSkeleton />}>
                         <AssessmentList
-                            assessments={assessmentsResponse.success ? assessmentsResponse.data.completed : []}
+                            assessments={completedAssessments}
                             emptyMessage="You haven't completed any assessments yet"
                             type="completed"
                         />
@@ -125,7 +132,7 @@ export default async function AssessmentsPage() {
                 <TabsContent value="all">
                     <Suspense fallback={<AssessmentSkeleton />}>
                         <AssessmentList
-                            assessments={assessmentsResponse.success ? [...assessmentsResponse.data.available, ...assessmentsResponse.data.completed] : []}
+                            assessments={[...availableAssessments, ...completedAssessments]}
                             emptyMessage="No assessments found"
                             type="all"
                         />
