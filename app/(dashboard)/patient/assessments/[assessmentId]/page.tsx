@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAssessment } from "@/lib/actions/patient/programs";
+import { getAssessment } from "@/lib/actions/patient/assessments";
 import { AssessmentClient } from "@/components/patient/assessment-client";
 
 interface AssessmentPageProps {
@@ -52,9 +52,9 @@ export default async function AssessmentPage({ params }: AssessmentPageProps) {
             <div className="container mx-auto py-6">
                 <div className="flex flex-col gap-4">
                     <Button variant="ghost" size="sm" asChild className="w-fit">
-                        <Link href="/patient/programs">
+                        <Link href="/patient/assessments">
                             <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Programs
+                            Back to Assessments
                         </Link>
                     </Button>
 
@@ -95,9 +95,9 @@ export default async function AssessmentPage({ params }: AssessmentPageProps) {
         <div className="container mx-auto py-6">
             <div className="mb-6">
                 <Button variant="ghost" size="sm" asChild className="mb-4">
-                    <Link href="/patient/programs">
+                    <Link href="/patient/assessments">
                         <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Programs
+                        Back to Assessments
                     </Link>
                 </Button>
 

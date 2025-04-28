@@ -3,27 +3,38 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-//import { submitAssessment } from "@/lib/actions/patient/programs";
+import { submitAssessment } from "@/lib/actions/patient/assessments";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import {
+    Assessment,
+    AssessmentQuestion,
+    QuestionOption,
+    AssessmentAnswer
+} from "@/lib/actions/patient/assessments";
 import { MultipleChoiceQuestion } from "./assessment/multiple-choice";
 import { TrueFalseQuestion } from "./assessment/true-false";
 import { TextResponseQuestion } from "./assessment/text-response";
 
 interface AssessmentClientProps {
-    assessment: any;
+    assessment: Assessment;
     contentItemId: string;
 }
 
+interface SubmissionResult {
+    id: string;
+    score: number;
+    passed: boolean;
+}
 
 export function AssessmentClient({ assessment, contentItemId }: AssessmentClientProps) {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, any>>({});
+    const [answers, setAnswers] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [result, setResult] = useState<any>(null);
+    const [result, setResult] = useState<SubmissionResult | null>(null);
     const router = useRouter();
     const { toast } = useToast();
 
@@ -82,7 +93,7 @@ export function AssessmentClient({ assessment, contentItemId }: AssessmentClient
     }
 
     // Handle answer selection
-    const handleAnswer = (questionId: string, answer: any) => {
+    const handleAnswer = (questionId: string, answer: string) => {
         setAnswers(prev => ({
             ...prev,
             [questionId]: answer
@@ -121,7 +132,7 @@ export function AssessmentClient({ assessment, contentItemId }: AssessmentClient
 
         try {
             // Format answers for submission
-            const formattedAnswers = questions.map(question => {
+            const formattedAnswers: AssessmentAnswer[] = questions.map(question => {
                 const answer = answers[question.id];
 
                 if (question.question_type === 'multiple_choice' || question.question_type === 'true_false') {
@@ -136,13 +147,20 @@ export function AssessmentClient({ assessment, contentItemId }: AssessmentClient
                         questionType: question.question_type,
                         textResponse: answer
                     };
+                } else {
+                    // This should never happen, but TypeScript requires a return value
+                    return {
+                        questionId: question.id,
+                        questionType: 'text_response', // Default fallback
+                        textResponse: ''
+                    };
                 }
             });
 
             // Submit assessment
             const response = await submitAssessment(assessment.id, formattedAnswers);
 
-            if (response.success) {
+            if (response.success && response.data) {
                 setResult(response.data);
             } else {
                 toast({

@@ -95,6 +95,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
             .not("completed_at", "is", null);
         if (completedAssessmentsError) throw completedAssessmentsError;
 
+        // @ts-ignore
         const assessmentCompletionRate = totalAttempts > 0
             ? Math.round((completedAssessments / totalAttempts) * 100)
             : 0;

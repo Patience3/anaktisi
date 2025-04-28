@@ -213,7 +213,7 @@ export default async function PatientDetailPage({ params }: PatientDetailProps) 
                                 patientName={`${patient.first_name} ${patient.last_name}`}
                                 categoryId={categoryDetails?.categoryId}
                                 categoryName={categoryDetails?.categoryName}
-                                categoryEnrollmentId={categoryDetails?.id}
+                                categoryEnrollmentId={categoryDetails?.id ?? undefined}
                                 programs={programs}
                             />
                         </TabsContent>
